@@ -116,7 +116,7 @@ async def root():
 async def store_document(document: DocumentCreate):
     """Store a document with its embedding."""
     try:
-        embedding = await openai.get_embedding(document.text)
+        embedding = openai.get_embedding(document.text)
         doc_id = hash(document.text)
         await qdrant.store_document(document.text, embedding, document.metadata)
         return DocumentResponse(
@@ -145,7 +145,7 @@ async def store_document(document: DocumentCreate):
 async def search_documents(query: SearchQuery):
     """Search for similar documents."""
     try:
-        query_embedding = await openai.get_embedding(query.text)
+        query_embedding = openai.get_embedding(query.text)
         results = await qdrant.search_similar(query_embedding, query.limit)
         return SearchResponse(results=results)
     except Exception as e:
@@ -170,7 +170,7 @@ async def ask_question(query: SearchQuery):
     """Ask a question and get an answer based on similar documents."""
     try:
         # Get similar documents
-        query_embedding = await openai.get_embedding(query.text)
+        query_embedding = openai.get_embedding(query.text)
         similar_docs = await qdrant.search_similar(query_embedding, query.limit)
         
         # Create context from similar documents
@@ -186,7 +186,7 @@ Question: {query.text}
 
 Answer:"""
         
-        answer = await openai.get_completion(prompt)
+        answer = openai.get_completion(prompt)
         return QuestionResponse(
             answer=answer,
             sources=similar_docs
@@ -219,7 +219,7 @@ Text to simplify:
 
 Simplified text:"""
         
-        simplified = await openai.get_completion(prompt)
+        simplified = openai.get_completion(prompt)
         return QuestionResponse(
             answer=simplified,
             sources=[]
