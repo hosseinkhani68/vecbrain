@@ -331,17 +331,13 @@ async def get_chat_history():
     response_model=ChatResponse,
     summary="Interactive chat endpoint",
     description="""
-    Interactive chat endpoint that supports multiple actions:
-    - simplify: Simplify complex text
-    - explain: Explain concepts or text
-    - related: Find related information
-    
-    The system maintains context throughout the conversation.
+    Interactive chat endpoint that maintains conversation context and memory.
+    The system will remember previous messages and use them to provide more contextual responses.
     """,
     response_description="The chat response with context"
 )
 async def chat(request: ChatRequest):
-    """Handle interactive chat requests."""
+    """Handle interactive chat requests with conversation memory."""
     try:
         # Generate or use context ID
         context_id = request.context_id or str(uuid.uuid4())
@@ -351,57 +347,24 @@ async def chat(request: ChatRequest):
         query_embedding = openai.get_embedding(request.text)
         recent_chats = await qdrant.search_similar(
             query_embedding=query_embedding,
-            limit=5
+            limit=10  # Increased limit for better context
         )
         
-        # Create context from recent chats
-        context = ""
+        # Convert recent chats to conversation history format
+        conversation_history = []
         if recent_chats:
-            context = "Previous conversation for context:\n"
             for chat in recent_chats:
                 if "type" in chat["metadata"] and chat["metadata"]["type"] == "chat":
-                    context += f"\n{chat['metadata']['role']}: {chat['text']}\n"
+                    conversation_history.append({
+                        "role": chat["metadata"]["role"],
+                        "content": chat["text"]
+                    })
         
-        # Handle different actions
-        if request.action == "simplify":
-            prompt = f"""Please simplify the following text to make it easier to understand. 
-            Keep the main ideas but use simpler language and shorter sentences.
-            Use the previous conversation as context to maintain consistency.
-
-{context}
-
-Text to simplify:
-{request.text}
-
-Simplified text:"""
-            response_text = openai.get_completion(prompt)
-            
-        elif request.action == "explain":
-            prompt = f"""Please explain the following text in detail.
-            Use the previous conversation as context to provide relevant explanations.
-
-{context}
-
-Text to explain:
-{request.text}
-
-Explanation:"""
-            response_text = openai.get_completion(prompt)
-            
-        elif request.action == "related":
-            prompt = f"""Please find and explain information related to the following text.
-            Use the previous conversation as context to provide relevant related information.
-
-{context}
-
-Text to find related information for:
-{request.text}
-
-Related information:"""
-            response_text = openai.get_completion(prompt)
-            
-        else:
-            raise HTTPException(status_code=400, detail="Invalid action")
+        # Get response using conversation history
+        response_text = openai.get_completion(
+            prompt=request.text,
+            conversation_history=conversation_history
+        )
         
         # Store user message
         user_embedding = openai.get_embedding(request.text)
@@ -413,8 +376,7 @@ Related information:"""
                 "type": "chat",
                 "chat_id": context_id,
                 "role": "user",
-                "timestamp": timestamp,
-                "action": request.action
+                "timestamp": timestamp
             }
         )
         
@@ -428,8 +390,7 @@ Related information:"""
                 "type": "chat",
                 "chat_id": context_id,
                 "role": "assistant",
-                "timestamp": timestamp,
-                "action": request.action
+                "timestamp": timestamp
             }
         )
         
@@ -439,8 +400,7 @@ Related information:"""
             role="assistant",
             timestamp=timestamp,
             context_id=context_id,
-            action=request.action,
-            related_info={"previous_messages": len(recent_chats)}
+            related_info={"previous_messages": len(conversation_history)}
         )
         
     except Exception as e:

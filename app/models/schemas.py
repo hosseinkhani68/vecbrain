@@ -50,9 +50,8 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     """Model for chat requests."""
-    text: str = Field(..., description="The user's message or text to process")
-    action: str = Field(..., description="The type of action (simplify/explain/related)")
-    context_id: Optional[str] = Field(None, description="Optional context ID to link messages")
+    text: str = Field(..., description="The user's message")
+    context_id: Optional[str] = Field(None, description="Optional context ID to link messages in a conversation")
 
 class ChatResponse(BaseModel):
     """Model for chat responses."""
@@ -61,5 +60,4 @@ class ChatResponse(BaseModel):
     role: str = Field(..., description="The role of the message sender (user/assistant)")
     timestamp: str = Field(..., description="Timestamp of the message")
     context_id: str = Field(..., description="Context ID linking related messages")
-    action: str = Field(..., description="The type of action performed")
     related_info: Optional[Dict[str, Any]] = Field(None, description="Additional related information") 
