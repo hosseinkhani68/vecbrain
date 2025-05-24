@@ -39,4 +39,11 @@ class QuestionResponse(BaseModel):
     sources: List[Dict[str, Any]] = Field(..., description="Source documents used to generate the answer")
 
 class SimplifyRequest(BaseModel):
-    text: str 
+    text: str
+
+class ChatMessage(BaseModel):
+    """Model for chat messages."""
+    id: str = Field(..., description="Unique identifier for the chat message")
+    text: str = Field(..., description="The message text")
+    role: str = Field(..., description="The role of the message sender (user/assistant)")
+    timestamp: str = Field(..., description="Timestamp of the message") 

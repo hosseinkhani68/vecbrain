@@ -8,9 +8,12 @@ from app.models.schemas import (
     SearchQuery,
     SearchResponse,
     QuestionResponse,
-    SimplifyRequest
+    SimplifyRequest,
+    ChatMessage
 )
 import uuid
+from datetime import datetime
+from typing import List
 
 app = FastAPI(
     title="VecBrain API",
@@ -205,7 +208,8 @@ Answer:"""
     The process:
     1. Takes the input text
     2. Uses OpenAI to generate a simplified version
-    3. Returns the simplified text
+    3. Stores the interaction in chat history
+    4. Returns the simplified text
     """,
     response_description="The simplified text"
 )
@@ -221,9 +225,75 @@ Text to simplify:
 Simplified text:"""
         
         simplified = openai.get_completion(prompt)
+        
+        # Store in chat history
+        chat_id = str(uuid.uuid4())
+        timestamp = datetime.utcnow().isoformat()
+        
+        # Store original text
+        original_embedding = openai.get_embedding(request.text)
+        await qdrant.store_document(
+            doc_id=f"chat_{chat_id}_original",
+            text=request.text,
+            embedding=original_embedding,
+            metadata={
+                "type": "chat",
+                "chat_id": chat_id,
+                "role": "user",
+                "timestamp": timestamp
+            }
+        )
+        
+        # Store simplified text
+        simplified_embedding = openai.get_embedding(simplified)
+        await qdrant.store_document(
+            doc_id=f"chat_{chat_id}_simplified",
+            text=simplified,
+            embedding=simplified_embedding,
+            metadata={
+                "type": "chat",
+                "chat_id": chat_id,
+                "role": "assistant",
+                "timestamp": timestamp
+            }
+        )
+        
         return QuestionResponse(
             answer=simplified,
             sources=[]
         )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get(
+    "/chat-history",
+    response_model=List[ChatMessage],
+    summary="Get chat history",
+    description="Retrieve the chat history with simplified texts."
+)
+async def get_chat_history():
+    """Get the chat history."""
+    try:
+        # Search for all chat messages
+        results = await qdrant.search_similar(
+            query_embedding=[0] * 1536,  # Dummy embedding to get all messages
+            limit=100  # Adjust as needed
+        )
+        
+        # Filter and sort chat messages
+        chat_messages = []
+        for result in results:
+            if "type" in result["metadata"] and result["metadata"]["type"] == "chat":
+                chat_messages.append({
+                    "id": result["metadata"]["chat_id"],
+                    "text": result["text"],
+                    "role": result["metadata"]["role"],
+                    "timestamp": result["metadata"]["timestamp"]
+                })
+        
+        # Sort by timestamp
+        chat_messages.sort(key=lambda x: x["timestamp"])
+        
+        return chat_messages
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) 
