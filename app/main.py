@@ -10,6 +10,7 @@ from app.models.schemas import (
     QuestionResponse,
     SimplifyRequest
 )
+import uuid
 
 app = FastAPI(
     title="VecBrain API",
@@ -117,8 +118,8 @@ async def store_document(document: DocumentCreate):
     """Store a document with its embedding."""
     try:
         embedding = openai.get_embedding(document.text)
-        doc_id = hash(document.text)
-        await qdrant.store_document(document.text, embedding, document.metadata)
+        doc_id = str(uuid.uuid4())  # Generate a UUID for the document
+        await qdrant.store_document(doc_id, document.text, embedding, document.metadata)
         return DocumentResponse(
             id=doc_id,
             text=document.text,

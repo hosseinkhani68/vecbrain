@@ -22,14 +22,14 @@ async def init_collection():
             )
         )
 
-async def store_document(text: str, embedding: list[float], metadata: dict = None):
+async def store_document(doc_id: str, text: str, embedding: list[float], metadata: dict = None):
     """Store a document with its embedding in Qdrant."""
     await init_collection()
     client.upsert(
         collection_name=COLLECTION_NAME,
         points=[
             models.PointStruct(
-                id=hash(text),  # Simple hash as ID
+                id=doc_id,  # Use the provided UUID
                 vector=embedding,
                 payload={"text": text, **(metadata or {})}
             )

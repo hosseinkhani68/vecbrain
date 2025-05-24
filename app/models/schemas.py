@@ -13,7 +13,7 @@ class DocumentCreate(BaseModel):
 
 class DocumentResponse(BaseModel):
     """Model for document response."""
-    id: int = Field(..., description="Unique identifier for the document")
+    id: str = Field(..., description="Unique identifier for the document")
     text: str
     metadata: Dict[str, Any]
     embedding: List[float] = Field(..., description="Vector embedding of the document")
