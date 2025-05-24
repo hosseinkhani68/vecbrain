@@ -207,17 +207,43 @@ Answer:"""
     
     The process:
     1. Takes the input text
-    2. Uses OpenAI to generate a simplified version
-    3. Stores the interaction in chat history
-    4. Returns the simplified text
+    2. Uses previous chat history as context
+    3. Uses OpenAI to generate a simplified version
+    4. Stores the interaction in chat history
+    5. Returns the simplified text
     """,
     response_description="The simplified text"
 )
 async def simplify_text(request: SimplifyRequest):
     """Simplify text to make it easier to understand."""
     try:
+        # Get recent chat history for context
+        query_embedding = openai.get_embedding(request.text)
+        recent_chats = await qdrant.search_similar(
+            query_embedding=query_embedding,
+            limit=5  # Get 5 most relevant previous simplifications
+        )
+        
+        # Create context from recent chats
+        context = ""
+        if recent_chats:
+            context = "Previous simplifications for context:\n"
+            for chat in recent_chats:
+                if "type" in chat["metadata"] and chat["metadata"]["type"] == "chat":
+                    context += f"\nOriginal: {chat['text']}\n"
+                    # Find the corresponding simplified version
+                    simplified_chats = await qdrant.search_similar(
+                        query_embedding=openai.get_embedding(chat["text"]),
+                        limit=1
+                    )
+                    if simplified_chats:
+                        context += f"Simplified: {simplified_chats[0]['text']}\n"
+        
         prompt = f"""Please simplify the following text to make it easier to understand. 
-        Keep the main ideas but use simpler language and shorter sentences:
+        Keep the main ideas but use simpler language and shorter sentences.
+        Use the previous simplifications as context to maintain consistency in simplification style.
+
+{context}
 
 Text to simplify:
 {request.text}
@@ -233,7 +259,7 @@ Simplified text:"""
         # Store original text
         original_embedding = openai.get_embedding(request.text)
         await qdrant.store_document(
-            doc_id=str(uuid.uuid4()),  # Generate a new UUID for the original message
+            doc_id=str(uuid.uuid4()),
             text=request.text,
             embedding=original_embedding,
             metadata={
@@ -247,7 +273,7 @@ Simplified text:"""
         # Store simplified text
         simplified_embedding = openai.get_embedding(simplified)
         await qdrant.store_document(
-            doc_id=str(uuid.uuid4()),  # Generate a new UUID for the simplified message
+            doc_id=str(uuid.uuid4()),
             text=simplified,
             embedding=simplified_embedding,
             metadata={
@@ -260,7 +286,7 @@ Simplified text:"""
         
         return QuestionResponse(
             answer=simplified,
-            sources=[]
+            sources=recent_chats  # Include relevant previous simplifications as sources
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
