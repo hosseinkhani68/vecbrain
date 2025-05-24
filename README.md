@@ -66,5 +66,19 @@ Once the server is running, you can access:
 │   └── models/
 │       └── schemas.py    # Pydantic models
 ├── requirements.txt
+├── Procfile             # Deployment configuration
 └── .env
-``` 
+```
+
+## Deployment
+
+The application includes a `Procfile` for deployment on platforms like Railway. The Procfile specifies how to run the application:
+
+```
+web: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+```
+
+Make sure to set the following environment variables in your deployment platform:
+- `OPENAI_API_KEY`
+- `QDRANT_URL`
+- `QDRANT_API_KEY` 
