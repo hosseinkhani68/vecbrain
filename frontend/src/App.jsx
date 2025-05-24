@@ -9,6 +9,35 @@ function App() {
   const [contextId, setContextId] = useState(null);
   const messagesEndRef = useRef(null);
 
+  // Load chat history when component mounts
+  useEffect(() => {
+    const loadChatHistory = async () => {
+      try {
+        const response = await fetch('http://localhost:8080/chat-history');
+        if (!response.ok) {
+          throw new Error('Failed to load chat history');
+        }
+        const history = await response.json();
+        
+        // Sort messages by timestamp
+        const sortedMessages = history.sort((a, b) => 
+          new Date(a.timestamp) - new Date(b.timestamp)
+        );
+        
+        setMessages(sortedMessages);
+        
+        // Set context ID from the most recent message if available
+        if (sortedMessages.length > 0) {
+          setContextId(sortedMessages[sortedMessages.length - 1].id);
+        }
+      } catch (error) {
+        console.error('Error loading chat history:', error);
+      }
+    };
+
+    loadChatHistory();
+  }, []);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -31,7 +60,7 @@ function App() {
       setMessages(prev => [...prev, userMessage]);
 
       // Send to backend
-      const response = await fetch('http://vecbrain-production.up.railway.app/chat', {
+      const response = await fetch('http://localhost:8080/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
