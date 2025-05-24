@@ -1,12 +1,14 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
+from fastapi.middleware.cors import CORSMiddleware
 from app.services import openai, qdrant
 from app.models.schemas import (
     DocumentCreate,
     DocumentResponse,
     SearchQuery,
     SearchResponse,
-    QuestionResponse
+    QuestionResponse,
+    SimplifyRequest
 )
 
 app = FastAPI(
@@ -18,6 +20,7 @@ app = FastAPI(
     * Store documents with embeddings
     * Search for similar documents
     * Ask questions and get AI-powered answers
+    * Simplify complex text
     
     ## Authentication
     Currently, this API is open. In production, you should add authentication.
@@ -26,6 +29,15 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_url="/openapi.json"
+)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods
+    allow_headers=["*"],  # Allows all headers
 )
 
 @app.get("/", response_class=HTMLResponse)
@@ -178,6 +190,39 @@ Answer:"""
         return QuestionResponse(
             answer=answer,
             sources=similar_docs
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post(
+    "/simplify",
+    response_model=QuestionResponse,
+    summary="Simplify text",
+    description="""
+    Simplify complex text to make it easier to understand.
+    
+    The process:
+    1. Takes the input text
+    2. Uses OpenAI to generate a simplified version
+    3. Returns the simplified text
+    """,
+    response_description="The simplified text"
+)
+async def simplify_text(request: SimplifyRequest):
+    """Simplify text to make it easier to understand."""
+    try:
+        prompt = f"""Please simplify the following text to make it easier to understand. 
+        Keep the main ideas but use simpler language and shorter sentences:
+
+Text to simplify:
+{request.text}
+
+Simplified text:"""
+        
+        simplified = await openai.get_completion(prompt)
+        return QuestionResponse(
+            answer=simplified,
+            sources=[]
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) 

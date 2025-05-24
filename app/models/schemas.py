@@ -1,24 +1,27 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 
 class DocumentBase(BaseModel):
     """Base document model."""
     text: str = Field(..., description="The text content of the document")
     metadata: Optional[Dict] = Field(default=None, description="Additional metadata for the document")
 
-class DocumentCreate(DocumentBase):
+class DocumentCreate(BaseModel):
     """Model for creating a new document."""
-    pass
+    text: str
+    metadata: Optional[Dict[str, Any]] = {}
 
-class DocumentResponse(DocumentBase):
+class DocumentResponse(BaseModel):
     """Model for document response."""
     id: int = Field(..., description="Unique identifier for the document")
-    embedding: Optional[List[float]] = Field(default=None, description="Vector embedding of the document")
+    text: str
+    metadata: Dict[str, Any]
+    embedding: List[float] = Field(..., description="Vector embedding of the document")
 
 class SearchQuery(BaseModel):
     """Model for search queries."""
     text: str = Field(..., description="The search query text")
-    limit: Optional[int] = Field(default=5, description="Maximum number of results to return")
+    limit: int = 5
 
 class SearchResult(BaseModel):
     """Model for search results."""
@@ -28,9 +31,12 @@ class SearchResult(BaseModel):
 
 class SearchResponse(BaseModel):
     """Model for search response."""
-    results: List[SearchResult] = Field(..., description="List of search results")
+    results: List[Dict[str, Any]] = Field(..., description="List of search results")
 
 class QuestionResponse(BaseModel):
     """Model for question answering response."""
     answer: str = Field(..., description="The generated answer to the question")
-    sources: List[SearchResult] = Field(..., description="Source documents used to generate the answer") 
+    sources: List[Dict[str, Any]] = Field(..., description="Source documents used to generate the answer")
+
+class SimplifyRequest(BaseModel):
+    text: str 
