@@ -233,7 +233,7 @@ Simplified text:"""
         # Store original text
         original_embedding = openai.get_embedding(request.text)
         await qdrant.store_document(
-            doc_id=f"chat_{chat_id}_original",
+            doc_id=str(uuid.uuid4()),  # Generate a new UUID for the original message
             text=request.text,
             embedding=original_embedding,
             metadata={
@@ -247,7 +247,7 @@ Simplified text:"""
         # Store simplified text
         simplified_embedding = openai.get_embedding(simplified)
         await qdrant.store_document(
-            doc_id=f"chat_{chat_id}_simplified",
+            doc_id=str(uuid.uuid4()),  # Generate a new UUID for the simplified message
             text=simplified,
             embedding=simplified_embedding,
             metadata={
