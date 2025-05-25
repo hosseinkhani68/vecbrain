@@ -2,12 +2,20 @@ from pydantic_settings import BaseSettings
 from functools import lru_cache
 import os
 from typing import Optional
+from qdrant_client import QdrantClient
 
 class Settings(BaseSettings):
     """Application settings."""
     openai_api_key: str
-    qdrant_url: str = "http://localhost:6333"  # Default Qdrant URL
-    qdrant_api_key: Optional[str] = None  # Optional API key for Qdrant
+    qdrant_url: str
+    qdrant_api_key: str
+
+    @property
+    def qdrant_client(self) -> QdrantClient:
+        return QdrantClient(
+            url=self.qdrant_url,
+            api_key=self.qdrant_api_key
+        )
 
     class Config:
         env_file = ".env"
