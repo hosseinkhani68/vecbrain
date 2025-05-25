@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
+from datetime import datetime
 
 class DocumentBase(BaseModel):
     """Base document model."""
@@ -41,25 +42,44 @@ class QuestionResponse(BaseModel):
 class SimplifyRequest(BaseModel):
     text: str
 
+class Document(BaseModel):
+    """Schema for a document."""
+    doc_id: str = Field(..., description="Unique identifier for the document")
+    title: str = Field(..., description="Title of the document")
+    source: str = Field(..., description="Source/path of the document")
+    chunks: int = Field(..., description="Number of chunks in the document")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
+    created_at: datetime = Field(default_factory=datetime.utcnow, description="Creation timestamp")
+    updated_at: datetime = Field(default_factory=datetime.utcnow, description="Last update timestamp")
+
+class DocumentChunk(BaseModel):
+    """Schema for a document chunk."""
+    chunk_id: str = Field(..., description="Unique identifier for the chunk")
+    doc_id: str = Field(..., description="ID of the parent document")
+    text: str = Field(..., description="Content of the chunk")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
+    created_at: datetime = Field(default_factory=datetime.utcnow, description="Creation timestamp")
+
 class ChatMessage(BaseModel):
-    """Model for chat messages."""
-    id: str = Field(..., description="Unique identifier for the chat message")
-    text: str = Field(..., description="The message text")
-    role: str = Field(..., description="The role of the message sender (user/assistant)")
-    timestamp: str = Field(..., description="Timestamp of the message")
+    """Schema for a chat message."""
+    id: str = Field(..., description="Unique identifier for the message")
+    text: str = Field(..., description="Content of the message")
+    role: str = Field(..., description="Role of the message sender (user/assistant)")
+    timestamp: datetime = Field(default_factory=datetime.utcnow, description="Message timestamp")
+    context_id: Optional[str] = Field(None, description="Context ID for conversation grouping")
 
 class ChatRequest(BaseModel):
-    """Request model for chat endpoint."""
-    text: str = Field(..., description="The message text to process")
-    context_id: Optional[str] = Field(None, description="Optional context ID for conversation continuity")
+    """Schema for a chat request."""
+    text: str = Field(..., description="Message text", max_length=500)
+    context_id: Optional[str] = Field(None, description="Context ID for conversation grouping")
 
 class ChatResponse(BaseModel):
-    """Response model for chat endpoint."""
-    id: str = Field(..., description="Unique identifier for the message")
-    text: str = Field(..., description="The response text")
-    role: str = Field(..., description="The role of the message sender (user/assistant)")
-    timestamp: str = Field(..., description="Timestamp of the message")
-    context_id: str = Field(..., description="Context ID for conversation grouping")
+    """Schema for a chat response."""
+    id: str = Field(..., description="Unique identifier for the response")
+    text: str = Field(..., description="Response text")
+    role: str = Field(default="assistant", description="Role of the response")
+    timestamp: datetime = Field(default_factory=datetime.utcnow, description="Response timestamp")
+    context_id: Optional[str] = Field(None, description="Context ID for conversation grouping")
 
 class ChatHistoryResponse(BaseModel):
     """Response model for chat history endpoint."""
@@ -109,21 +129,21 @@ class AgentQueryResponse(BaseModel):
     error: Optional[str] = Field(None, description="Error message if any")
 
 class PromptRequest(BaseModel):
-    """Request model for prompt generation."""
-    template_name: str = Field(..., description="Name of the template to use")
+    """Schema for a prompt generation request."""
+    template_name: str = Field(..., description="Name of the prompt template to use")
     input_data: Dict[str, Any] = Field(..., description="Input data for the template")
-    context: Optional[str] = Field(None, description="Additional context for the prompt")
+    context: Optional[Dict[str, Any]] = Field(None, description="Additional context")
     history: Optional[List[Dict[str, str]]] = Field(None, description="Conversation history")
 
 class PromptResponse(BaseModel):
-    """Response model for prompt generation."""
+    """Schema for a prompt generation response."""
     response: str = Field(..., description="Generated response")
     template_used: str = Field(..., description="Name of the template used")
-    timestamp: str = Field(..., description="Timestamp of the response")
-    error: Optional[str] = Field(None, description="Error message if any")
+    timestamp: datetime = Field(default_factory=datetime.utcnow, description="Generation timestamp")
+    error: Optional[str] = Field(None, description="Error message if generation failed")
 
 class TemplateInfoResponse(BaseModel):
-    """Response model for template information."""
+    """Schema for template information."""
     name: str = Field(..., description="Template name")
     description: str = Field(..., description="Template description")
     input_variables: List[str] = Field(..., description="Required input variables")
@@ -132,4 +152,14 @@ class StreamResponse(BaseModel):
     """Model for streaming response chunks."""
     chunk: str = Field(..., description="A chunk of the streaming response")
     done: bool = Field(default=False, description="Whether this is the final chunk")
-    error: Optional[str] = Field(None, description="Error message if any") 
+    error: Optional[str] = Field(None, description="Error message if any")
+
+class SearchRequest(BaseModel):
+    """Schema for a search request."""
+    query: str = Field(..., description="Search query")
+    limit: int = Field(default=5, description="Maximum number of results to return")
+
+class SearchResponse(BaseModel):
+    """Schema for search results."""
+    results: List[Dict[str, Any]] = Field(..., description="Search results")
+    total: int = Field(..., description="Total number of results found") 
