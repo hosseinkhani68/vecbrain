@@ -1,6 +1,6 @@
 from openai import OpenAI
 from app.config import get_settings
-from typing import List, Dict
+from typing import List, Dict, AsyncGenerator
 from functools import lru_cache
 import tiktoken
 from openai import OpenAIError
@@ -50,7 +50,47 @@ def get_embedding(text: str) -> list[float]:
         print(f"Unexpected error: {str(e)}")
         raise
 
-def get_completion(prompt: str, conversation_history: List[Dict[str, str]] = None) -> str:
+async def get_completion_stream(prompt: str, conversation_history: List[Dict[str, str]] = None) -> AsyncGenerator[str, None]:
+    """Get streaming completion from OpenAI's API with conversation history support.
+    
+    Args:
+        prompt: The current user message
+        conversation_history: List of previous messages in the format [{"role": "user/assistant", "content": "message"}]
+        
+    Yields:
+        str: Chunks of the response as they are generated
+    """
+    messages = []
+    
+    # Add conversation history if provided
+    if conversation_history:
+        messages.extend(conversation_history)
+    
+    # Add the current prompt
+    messages.append({"role": "user", "content": prompt})
+    
+    try:
+        stream = await client.chat.completions.create(
+            model="gpt-4-1106-preview",  # GPT-4 Turbo
+            messages=messages,
+            temperature=0.7,
+            max_tokens=1000,
+            top_p=0.95,
+            frequency_penalty=0.0,
+            presence_penalty=0.0,
+            stream=True  # Enable streaming
+        )
+        
+        async for chunk in stream:
+            if chunk.choices[0].delta.content is not None:
+                yield chunk.choices[0].delta.content
+                
+    except Exception as e:
+        print(f"Error in streaming completion: {str(e)}")
+        yield f"Error: {str(e)}"
+
+# Update the existing get_completion to use the new streaming function
+async def get_completion(prompt: str, conversation_history: List[Dict[str, str]] = None) -> str:
     """Get completion from OpenAI's API with conversation history support.
     
     Args:
@@ -66,13 +106,13 @@ def get_completion(prompt: str, conversation_history: List[Dict[str, str]] = Non
     # Add the current prompt
     messages.append({"role": "user", "content": prompt})
     
-    response = client.chat.completions.create(
+    response = await client.chat.completions.create(
         model="gpt-4-1106-preview",  # GPT-4 Turbo
         messages=messages,
-        temperature=0.7,  # Add some creativity while keeping responses focused
-        max_tokens=1000,  # Limit response length to control costs
-        top_p=0.95,  # Nucleus sampling for better response quality
-        frequency_penalty=0.0,  # Don't penalize frequent tokens
-        presence_penalty=0.0  # Don't penalize new tokens
+        temperature=0.7,
+        max_tokens=1000,
+        top_p=0.95,
+        frequency_penalty=0.0,
+        presence_penalty=0.0
     )
     return response.choices[0].message.content 

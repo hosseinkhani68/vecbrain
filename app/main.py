@@ -1,5 +1,5 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from app.services import openai, qdrant
 from app.models.schemas import (
@@ -12,12 +12,30 @@ from app.models.schemas import (
     ChatMessage,
     ChatResponse,
     ChatRequest,
-    ChatHistoryResponse
+    ChatHistoryResponse,
+    DocumentProcessRequest,
+    DocumentProcessResponse,
+    DocumentSearchRequest,
+    DocumentSearchResponse,
+    DocumentChunksRequest,
+    DocumentChunksResponse,
+    AgentQueryRequest,
+    AgentQueryResponse,
+    PromptRequest,
+    PromptResponse,
+    TemplateInfoResponse
 )
 import uuid
 from datetime import datetime
-from typing import List
+from typing import List, Optional, Dict, Any
 from app.services.langchain_service import LangChainService
+from app.services.document_service import DocumentService
+from app.services.agent_service import AgentService
+from app.services.prompt_service import PromptService
+import os
+import shutil
+import json
+from app.services.openai import get_completion_stream
 
 app = FastAPI(
     title="VecBrain API",
@@ -50,6 +68,15 @@ app.add_middleware(
 
 # Initialize LangChain service
 langchain_service = LangChainService()
+
+# Initialize document service
+document_service = DocumentService()
+
+# Initialize agent service
+agent_service = AgentService(document_service)
+
+# Initialize prompt service
+prompt_service = PromptService()
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
@@ -330,5 +357,149 @@ async def chat(request: ChatRequest):
             context_id=request.context_id
         )
         return response
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post(
+    "/chat/stream",
+    response_class=StreamingResponse,
+    summary="Streaming chat endpoint",
+    description="""
+    Streaming chat endpoint that provides real-time responses.
+    The response is streamed token by token as they are generated.
+    """,
+)
+async def chat_stream(request: ChatRequest):
+    """Handle streaming chat requests."""
+    try:
+        async def generate():
+            async for chunk in get_completion_stream(request.text, request.history):
+                yield f"data: {json.dumps({'chunk': chunk, 'done': False})}\n\n"
+            yield f"data: {json.dumps({'chunk': '', 'done': True})}\n\n"
+            
+        return StreamingResponse(
+            generate(),
+            media_type="text/event-stream"
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post(
+    "/documents/process",
+    response_model=DocumentProcessResponse,
+    summary="Process a document",
+    description="Upload and process a document for semantic search."
+)
+async def process_document(
+    file: UploadFile = File(...),
+    metadata: Optional[Dict[str, Any]] = None
+):
+    """Process a document and store it in the vector store."""
+    try:
+        # Create temporary file
+        temp_file = f"temp_{file.filename}"
+        with open(temp_file, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        # Process document
+        result = await document_service.process_document(temp_file, metadata)
+        
+        # Clean up
+        os.remove(temp_file)
+        
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post(
+    "/documents/search",
+    response_model=DocumentSearchResponse,
+    summary="Search documents",
+    description="Search for relevant document chunks using semantic search."
+)
+async def search_documents(request: DocumentSearchRequest):
+    """Search for relevant document chunks."""
+    try:
+        results = await document_service.search_documents(
+            query=request.query,
+            limit=request.limit
+        )
+        return DocumentSearchResponse(results=results)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post(
+    "/documents/chunks",
+    response_model=DocumentChunksResponse,
+    summary="Get document chunks",
+    description="Retrieve all chunks for a specific document."
+)
+async def get_document_chunks(request: DocumentChunksRequest):
+    """Get all chunks for a specific document."""
+    try:
+        chunks = await document_service.get_document_chunks(request.doc_id)
+        return DocumentChunksResponse(chunks=chunks)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post(
+    "/agent/query",
+    response_model=AgentQueryResponse,
+    summary="Query the agent",
+    description="Send a query to the agent that can use various tools to answer."
+)
+async def query_agent(request: AgentQueryRequest):
+    """Process a query using the agent and its tools."""
+    try:
+        result = await agent_service.process_complex_query(request.query)
+        return AgentQueryResponse(**result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post(
+    "/prompt/generate",
+    response_model=PromptResponse,
+    summary="Generate response using a prompt template",
+    description="Generate a response using one of the available prompt templates."
+)
+async def generate_prompt_response(request: PromptRequest):
+    """Generate a response using the specified prompt template."""
+    try:
+        result = await prompt_service.generate_response(
+            template_name=request.template_name,
+            input_data=request.input_data,
+            context=request.context,
+            history=request.history
+        )
+        return PromptResponse(**result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get(
+    "/prompt/templates",
+    response_model=List[str],
+    summary="Get available templates",
+    description="Get a list of available prompt template names."
+)
+async def get_templates():
+    """Get a list of available prompt templates."""
+    try:
+        return prompt_service.get_available_templates()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get(
+    "/prompt/templates/{template_name}",
+    response_model=TemplateInfoResponse,
+    summary="Get template information",
+    description="Get detailed information about a specific prompt template."
+)
+async def get_template_info(template_name: str):
+    """Get information about a specific prompt template."""
+    try:
+        info = prompt_service.get_template_info(template_name)
+        return TemplateInfoResponse(**info)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) 
