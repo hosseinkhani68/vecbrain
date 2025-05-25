@@ -11,11 +11,13 @@ from app.models.schemas import (
     SimplifyRequest,
     ChatMessage,
     ChatResponse,
-    ChatRequest
+    ChatRequest,
+    ChatHistoryResponse
 )
 import uuid
 from datetime import datetime
 from typing import List
+from app.services.langchain_service import LangChainService
 
 app = FastAPI(
     title="VecBrain API",
@@ -45,6 +47,9 @@ app.add_middleware(
     allow_methods=["*"],  # Allows all methods
     allow_headers=["*"],  # Allows all headers
 )
+
+# Initialize LangChain service
+langchain_service = LangChainService()
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
@@ -295,34 +300,15 @@ Simplified text:"""
 
 @app.get(
     "/chat-history",
-    response_model=List[ChatMessage],
+    response_model=List[ChatHistoryResponse],
     summary="Get chat history",
     description="Retrieve the chat history with simplified texts."
 )
-async def get_chat_history():
+async def get_chat_history(context_id: str = None):
     """Get the chat history."""
     try:
-        # Search for all chat messages
-        results = await qdrant.search_similar(
-            query_embedding=[0] * 1536,  # Dummy embedding to get all messages
-            limit=100  # Adjust as needed
-        )
-        
-        # Filter and sort chat messages
-        chat_messages = []
-        for result in results:
-            if "type" in result["metadata"] and result["metadata"]["type"] == "chat":
-                chat_messages.append({
-                    "id": result["metadata"]["chat_id"],
-                    "text": result["text"],
-                    "role": result["metadata"]["role"],
-                    "timestamp": result["metadata"]["timestamp"]
-                })
-        
-        # Sort by timestamp
-        chat_messages.sort(key=lambda x: x["timestamp"])
-        
-        return chat_messages
+        messages = await langchain_service.get_chat_history(context_id)
+        return messages
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -339,69 +325,10 @@ async def get_chat_history():
 async def chat(request: ChatRequest):
     """Handle interactive chat requests with conversation memory."""
     try:
-        # Generate or use context ID
-        context_id = request.context_id or str(uuid.uuid4())
-        timestamp = datetime.utcnow().isoformat()
-        
-        # Get conversation history for context
-        query_embedding = openai.get_embedding(request.text)
-        recent_chats = await qdrant.search_similar(
-            query_embedding=query_embedding,
-            limit=10  # Increased limit for better context
-        )
-        
-        # Convert recent chats to conversation history format
-        conversation_history = []
-        if recent_chats:
-            for chat in recent_chats:
-                if "type" in chat["metadata"] and chat["metadata"]["type"] == "chat":
-                    conversation_history.append({
-                        "role": chat["metadata"]["role"],
-                        "content": chat["text"]
-                    })
-        
-        # Get response using conversation history
-        response_text = openai.get_completion(
-            prompt=request.text,
-            conversation_history=conversation_history
-        )
-        
-        # Store user message
-        user_embedding = openai.get_embedding(request.text)
-        await qdrant.store_document(
-            doc_id=str(uuid.uuid4()),
+        response = await langchain_service.process_message(
             text=request.text,
-            embedding=user_embedding,
-            metadata={
-                "type": "chat",
-                "chat_id": context_id,
-                "role": "user",
-                "timestamp": timestamp
-            }
+            context_id=request.context_id
         )
-        
-        # Store assistant response
-        response_embedding = openai.get_embedding(response_text)
-        await qdrant.store_document(
-            doc_id=str(uuid.uuid4()),
-            text=response_text,
-            embedding=response_embedding,
-            metadata={
-                "type": "chat",
-                "chat_id": context_id,
-                "role": "assistant",
-                "timestamp": timestamp
-            }
-        )
-        
-        return ChatResponse(
-            id=context_id,
-            text=response_text,
-            role="assistant",
-            timestamp=timestamp,
-            context_id=context_id,
-            related_info={"previous_messages": len(conversation_history)}
-        )
-        
+        return response
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) 

@@ -49,15 +49,21 @@ class ChatMessage(BaseModel):
     timestamp: str = Field(..., description="Timestamp of the message")
 
 class ChatRequest(BaseModel):
-    """Model for chat requests."""
-    text: str = Field(..., description="The user's message")
-    context_id: Optional[str] = Field(None, description="Optional context ID to link messages in a conversation")
+    """Request model for chat endpoint."""
+    text: str = Field(..., description="The message text to process")
+    context_id: Optional[str] = Field(None, description="Optional context ID for conversation continuity")
 
 class ChatResponse(BaseModel):
-    """Model for chat responses."""
-    id: str = Field(..., description="Unique identifier for the chat message")
+    """Response model for chat endpoint."""
+    id: str = Field(..., description="Unique identifier for the message")
     text: str = Field(..., description="The response text")
     role: str = Field(..., description="The role of the message sender (user/assistant)")
     timestamp: str = Field(..., description="Timestamp of the message")
-    context_id: str = Field(..., description="Context ID linking related messages")
-    related_info: Optional[Dict[str, Any]] = Field(None, description="Additional related information") 
+    context_id: str = Field(..., description="Context ID for conversation grouping")
+
+class ChatHistoryResponse(BaseModel):
+    """Response model for chat history endpoint."""
+    id: str = Field(..., description="Unique identifier for the message")
+    text: str = Field(..., description="The message text")
+    role: str = Field(..., description="The role of the message sender (user/assistant)")
+    timestamp: str = Field(..., description="Timestamp of the message") 
