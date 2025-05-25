@@ -3,7 +3,7 @@ from langchain.agents import Tool, AgentExecutor, initialize_agent
 from langchain.agents.agent_types import AgentType
 from langchain.tools import BaseTool
 from langchain.callbacks.manager import CallbackManagerForToolRun
-from typing import Optional, Type
+from typing import Optional, Type, Any
 from pydantic import BaseModel, Field
 import requests
 import json
@@ -15,8 +15,8 @@ class CalculatorInput(BaseModel):
     expression: str = Field(description="The mathematical expression to evaluate")
 
 class CalculatorTool(BaseTool):
-    name = "calculator"
-    description = "Useful for performing mathematical calculations"
+    name: str = "calculator"
+    description: str = "Useful for performing mathematical calculations"
     args_schema: Type[BaseModel] = CalculatorInput
 
     def _run(self, expression: str, run_manager: Optional[CallbackManagerForToolRun] = None) -> str:
@@ -33,8 +33,8 @@ class WeatherInput(BaseModel):
     location: str = Field(description="The city name to get weather for")
 
 class WeatherTool(BaseTool):
-    name = "weather"
-    description = "Useful for getting weather information for a location"
+    name: str = "weather"
+    description: str = "Useful for getting weather information for a location"
     args_schema: Type[BaseModel] = WeatherInput
 
     def _run(self, location: str, run_manager: Optional[CallbackManagerForToolRun] = None) -> str:
@@ -49,8 +49,8 @@ class SearchInput(BaseModel):
     query: str = Field(description="The search query")
 
 class SearchTool(BaseTool):
-    name = "document_search"
-    description = "Useful for searching through documents"
+    name: str = "document_search"
+    description: str = "Useful for searching through documents"
     args_schema: Type[BaseModel] = SearchInput
 
     def __init__(self, document_service):
