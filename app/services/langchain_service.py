@@ -1,5 +1,5 @@
 from langchain_openai import OpenAIEmbeddings
-from langchain_qdrant import QdrantVectorStore
+from langchain_community.vectorstores import Qdrant
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.chains import ConversationalRetrievalChain
 from langchain_openai import ChatOpenAI
@@ -15,10 +15,10 @@ class LangChainService:
             model="text-embedding-3-small",
             openai_api_key=settings.openai_api_key
         )
-        self.vector_store = QdrantVectorStore(
+        self.vector_store = Qdrant(
+            client=settings.qdrant_client,
             collection_name="documents",
-            embeddings=self.embeddings,
-            client=settings.qdrant_client
+            embeddings=self.embeddings
         )
         self.text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=1000,
