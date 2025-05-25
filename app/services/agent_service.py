@@ -89,7 +89,7 @@ class AgentService:
         agent = create_openai_functions_agent(
             llm=self.llm,
             tools=self.tools,
-            system_message="""You are a helpful AI assistant that can search through documents and perform calculations.
+            system_prompt="""You are a helpful AI assistant that can search through documents and perform calculations.
             When searching documents, provide clear and concise summaries of the relevant information found.
             When performing calculations, show your work and explain the steps taken."""
         )
