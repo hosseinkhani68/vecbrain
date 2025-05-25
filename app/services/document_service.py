@@ -1,17 +1,20 @@
-from langchain.document_loaders import (
+from langchain_community.document_loaders import (
     TextLoader,
-    PDFLoader,
+    PDFMinerLoader,
     Docx2txtLoader,
-    CSVLoader
+    CSVLoader,
+    UnstructuredMarkdownLoader,
+    UnstructuredHTMLLoader
 )
 from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_community.vectorstores import Qdrant
 from langchain_openai import OpenAIEmbeddings
-from langchain_qdrant import Qdrant
-from qdrant_client import QdrantClient
 from app.config import get_settings
-from typing import List, Dict, Any
+from app.models.schemas import Document, DocumentChunk
+from typing import List, Dict, Any, Optional
 import os
 import uuid
+from datetime import datetime
 
 settings = get_settings()
 
@@ -41,9 +44,11 @@ class DocumentService:
         ext = os.path.splitext(file_path)[1].lower()
         loaders = {
             '.txt': TextLoader,
-            '.pdf': PDFLoader,
+            '.pdf': PDFMinerLoader,
             '.docx': Docx2txtLoader,
             '.csv': CSVLoader,
+            '.md': UnstructuredMarkdownLoader,
+            '.html': UnstructuredHTMLLoader,
         }
         if ext not in loaders:
             raise ValueError(f"Unsupported file type: {ext}")
