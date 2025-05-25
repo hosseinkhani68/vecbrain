@@ -2,7 +2,7 @@ from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain.memory import VectorStoreRetrieverMemory
 from langchain.chains import ConversationChain
 from langchain.prompts import PromptTemplate
-from langchain_community.vectorstores import Qdrant
+from langchain_qdrant import Qdrant
 from langchain.schema import Document
 from app.config import get_settings
 from typing import List, Dict, Any
