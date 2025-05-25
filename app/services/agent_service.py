@@ -2,6 +2,7 @@ from langchain_openai import ChatOpenAI
 from langchain.agents import Tool
 from langchain.tools import BaseTool
 from langchain.agents import AgentExecutor, create_openai_functions_agent
+from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from app.config import get_settings
 from app.services.document_service import DocumentService
 from typing import List, Dict, Any, Optional
@@ -86,13 +87,21 @@ class AgentService:
 
     def _create_agent(self) -> AgentExecutor:
         """Create the agent with the tools."""
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", """You are a helpful AI assistant that can search through documents and perform calculations.
+            When searching documents, provide clear and concise summaries of the relevant information found.
+            When performing calculations, show your work and explain the steps taken."""),
+            MessagesPlaceholder(variable_name="chat_history"),
+            ("human", "{input}"),
+            MessagesPlaceholder(variable_name="agent_scratchpad"),
+        ])
+        
         agent = create_openai_functions_agent(
             llm=self.llm,
             tools=self.tools,
-            system_prompt="""You are a helpful AI assistant that can search through documents and perform calculations.
-            When searching documents, provide clear and concise summaries of the relevant information found.
-            When performing calculations, show your work and explain the steps taken."""
+            prompt=prompt
         )
+        
         return AgentExecutor(
             agent=agent,
             tools=self.tools,
