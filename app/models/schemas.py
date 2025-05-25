@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 
+# Document Models
 class Document(BaseModel):
     """Schema for a document."""
     doc_id: str = Field(..., description="Unique identifier for the document")
@@ -22,27 +23,27 @@ class DocumentChunk(BaseModel):
 
 class DocumentCreate(BaseModel):
     """Model for creating a new document."""
-    text: str
-    metadata: Optional[Dict[str, Any]] = {}
+    text: str = Field(..., description="Document text content")
+    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Additional metadata")
 
 class DocumentResponse(BaseModel):
     """Model for document response."""
     id: str = Field(..., description="Unique identifier for the document")
-    text: str
-    metadata: Dict[str, Any]
+    text: str = Field(..., description="Document text content")
+    metadata: Dict[str, Any] = Field(..., description="Document metadata")
     embedding: List[float] = Field(..., description="Vector embedding of the document")
 
 class DocumentProcessRequest(BaseModel):
     """Request model for document processing."""
     file_path: str = Field(..., description="Path to the document file")
-    metadata: Optional[Dict[str, Any]] = Field(default=None, description="Additional metadata for the document")
+    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Additional metadata for the document")
 
 class DocumentProcessResponse(BaseModel):
     """Response model for document processing."""
     doc_id: str = Field(..., description="Unique identifier for the processed document")
     chunks: int = Field(..., description="Number of chunks the document was split into")
     source: str = Field(..., description="Source file path")
-    metadata: Optional[Dict[str, Any]] = Field(default=None, description="Document metadata")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Document metadata")
 
 class DocumentSearchRequest(BaseModel):
     """Request model for document search."""
@@ -62,6 +63,7 @@ class DocumentChunksResponse(BaseModel):
     """Response model for document chunks."""
     chunks: List[Dict[str, Any]] = Field(..., description="Document chunks with text and metadata")
 
+# Chat Models
 class ChatMessage(BaseModel):
     """Schema for a chat message."""
     id: str = Field(..., description="Unique identifier for the message")
@@ -87,6 +89,7 @@ class ChatHistoryResponse(BaseModel):
     """Response model for chat history endpoint."""
     messages: List[ChatMessage] = Field(..., description="List of chat messages")
 
+# Agent Models
 class AgentQueryRequest(BaseModel):
     """Request model for agent queries."""
     query: str = Field(..., description="The query to process using the agent")
@@ -94,10 +97,11 @@ class AgentQueryRequest(BaseModel):
 class AgentQueryResponse(BaseModel):
     """Response model for agent queries."""
     response: str = Field(..., description="The agent's response")
-    tools_used: List[str] = Field(default=[], description="List of tools used by the agent")
+    tools_used: List[str] = Field(default_factory=list, description="List of tools used by the agent")
     timestamp: datetime = Field(default_factory=datetime.utcnow, description="Timestamp of the response")
     error: Optional[str] = Field(None, description="Error message if any")
 
+# Prompt Models
 class PromptRequest(BaseModel):
     """Schema for a prompt generation request."""
     template_name: str = Field(..., description="Name of the prompt template to use")
@@ -118,6 +122,7 @@ class TemplateInfoResponse(BaseModel):
     description: str = Field(..., description="Template description")
     input_variables: List[str] = Field(..., description="Required input variables")
 
+# Streaming Models
 class StreamResponse(BaseModel):
     """Model for streaming response chunks."""
     chunk: str = Field(..., description="A chunk of the streaming response")
