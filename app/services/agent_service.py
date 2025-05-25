@@ -9,6 +9,8 @@ import requests
 import json
 from datetime import datetime
 import math
+from app.config import get_settings
+from app.services.document_service import DocumentService
 
 # Custom tool for calculations
 class CalculatorInput(BaseModel):
@@ -49,29 +51,39 @@ class SearchInput(BaseModel):
     query: str = Field(description="The search query")
 
 class SearchTool(BaseTool):
-    name: str = "document_search"
-    description: str = "Useful for searching through documents"
-    args_schema: Type[BaseModel] = SearchInput
+    name: str = "search_documents"
+    description: str = "Search for relevant information in the document store"
+    document_service: DocumentService = Field(description="Document service instance for searching documents")
 
-    def __init__(self, document_service):
-        super().__init__()
-        self.document_service = document_service
-
-    def _run(self, query: str, run_manager: Optional[CallbackManagerForToolRun] = None) -> str:
+    def _run(self, query: str) -> str:
+        """Run the search tool."""
         try:
-            results = self.document_service.search_documents(query, limit=3)
-            return json.dumps(results, indent=2)
+            results = self.document_service.search_documents(query)
+            if not results:
+                return "No relevant documents found."
+            
+            response = "Here are the relevant documents:\n\n"
+            for i, result in enumerate(results, 1):
+                response += f"{i}. {result['text']}\n"
+                if result.get('metadata'):
+                    response += f"   Source: {result['metadata'].get('source', 'Unknown')}\n"
+                response += "\n"
+            return response
         except Exception as e:
             return f"Error searching documents: {str(e)}"
 
+    async def _arun(self, query: str) -> str:
+        """Run the search tool asynchronously."""
+        return self._run(query)
+
 class AgentService:
-    def __init__(self, document_service):
-        self.llm = ChatOpenAI(
-            model_name="gpt-4-1106-preview",
-            temperature=0.7,
-            max_tokens=1000
-        )
+    def __init__(self, document_service: DocumentService):
         self.document_service = document_service
+        self.llm = ChatOpenAI(
+            model="gpt-4-1106-preview",
+            temperature=0.7,
+            openai_api_key=get_settings().openai_api_key
+        )
         self.tools = self._create_tools()
         self.agent = self._create_agent()
 
@@ -80,7 +92,7 @@ class AgentService:
         return [
             CalculatorTool(),
             WeatherTool(),
-            SearchTool(self.document_service),
+            SearchTool(document_service=self.document_service),
             Tool(
                 name="current_time",
                 func=lambda _: datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -95,13 +107,14 @@ class AgentService:
 
     def _create_agent(self):
         """Create an agent with the specified tools."""
-        return initialize_agent(
+        agent = initialize_agent(
             tools=self.tools,
             llm=self.llm,
             agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
             verbose=True,
             handle_parsing_errors=True
         )
+        return agent
 
     async def run_agent(self, query: str) -> str:
         """Run the agent with a query."""
