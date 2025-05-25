@@ -7,7 +7,7 @@ from langchain_community.document_loaders import (
     UnstructuredHTMLLoader
 )
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import Qdrant
+from langchain_qdrant import Qdrant
 from langchain_openai import OpenAIEmbeddings
 from app.config import get_settings
 from app.models.schemas import Document, DocumentChunk

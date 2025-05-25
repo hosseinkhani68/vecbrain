@@ -1,54 +1,17 @@
 from langchain_openai import ChatOpenAI
-from langchain.agents import Tool, AgentExecutor, initialize_agent
-from langchain.agents.agent_types import AgentType
+from langchain.agents import Tool
 from langchain.tools import BaseTool
-from langchain.callbacks.manager import CallbackManagerForToolRun
-from typing import Optional, Type, Any
+from langchain.agents import AgentExecutor, create_openai_functions_agent
+from app.config import get_settings
+from app.services.document_service import DocumentService
+from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
 import requests
 import json
 from datetime import datetime
 import math
-from app.config import get_settings
-from app.services.document_service import DocumentService
 
-# Custom tool for calculations
-class CalculatorInput(BaseModel):
-    expression: str = Field(description="The mathematical expression to evaluate")
-
-class CalculatorTool(BaseTool):
-    name: str = "calculator"
-    description: str = "Useful for performing mathematical calculations"
-    args_schema: Type[BaseModel] = CalculatorInput
-
-    def _run(self, expression: str, run_manager: Optional[CallbackManagerForToolRun] = None) -> str:
-        try:
-            # Safely evaluate the expression
-            allowed_names = {"abs": abs, "round": round, "min": min, "max": max, "sum": sum}
-            result = eval(expression, {"__builtins__": {}}, allowed_names)
-            return str(result)
-        except Exception as e:
-            return f"Error calculating: {str(e)}"
-
-# Custom tool for weather information
-class WeatherInput(BaseModel):
-    location: str = Field(description="The city name to get weather for")
-
-class WeatherTool(BaseTool):
-    name: str = "weather"
-    description: str = "Useful for getting weather information for a location"
-    args_schema: Type[BaseModel] = WeatherInput
-
-    def _run(self, location: str, run_manager: Optional[CallbackManagerForToolRun] = None) -> str:
-        try:
-            # This is a mock implementation. In a real app, you'd use a weather API
-            return f"Weather in {location}: Sunny, 25°C"
-        except Exception as e:
-            return f"Error getting weather: {str(e)}"
-
-# Custom tool for document search
-class SearchInput(BaseModel):
-    query: str = Field(description="The search query")
+settings = get_settings()
 
 class SearchTool(BaseTool):
     name: str = "search_documents"
@@ -76,51 +39,72 @@ class SearchTool(BaseTool):
         """Run the search tool asynchronously."""
         return self._run(query)
 
+class CalculatorTool(BaseTool):
+    name: str = "calculator"
+    description: str = "Perform mathematical calculations"
+
+    def _run(self, expression: str) -> str:
+        """Run the calculator tool."""
+        try:
+            # Basic safety check
+            if any(keyword in expression.lower() for keyword in ['import', 'eval', 'exec', 'os', 'sys']):
+                return "Error: Invalid expression"
+            
+            # Use eval for calculation (with safety measures)
+            allowed_names = {"abs": abs, "round": round, "min": min, "max": max, "sum": sum}
+            result = eval(expression, {"__builtins__": {}}, allowed_names)
+            return str(result)
+        except Exception as e:
+            return f"Error calculating: {str(e)}"
+
+    async def _arun(self, expression: str) -> str:
+        """Run the calculator tool asynchronously."""
+        return self._run(expression)
+
 class AgentService:
     def __init__(self, document_service: DocumentService):
         self.document_service = document_service
         self.llm = ChatOpenAI(
             model="gpt-4-1106-preview",
             temperature=0.7,
-            openai_api_key=get_settings().openai_api_key
+            openai_api_key=settings.openai_api_key
         )
         self.tools = self._create_tools()
         self.agent = self._create_agent()
 
-    def _create_tools(self):
-        """Create a list of tools for the agent to use."""
+    def _create_tools(self) -> List[BaseTool]:
+        """Create the tools for the agent."""
         return [
-            CalculatorTool(),
-            WeatherTool(),
             SearchTool(document_service=self.document_service),
+            CalculatorTool(),
             Tool(
                 name="current_time",
                 func=lambda _: datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 description="Useful for getting the current time"
-            ),
-            Tool(
-                name="format_number",
-                func=lambda x: f"{float(x):,.2f}",
-                description="Useful for formatting numbers with commas and decimals"
             )
         ]
 
-    def _create_agent(self):
-        """Create an agent with the specified tools."""
-        agent = initialize_agent(
-            tools=self.tools,
+    def _create_agent(self) -> AgentExecutor:
+        """Create the agent with the tools."""
+        agent = create_openai_functions_agent(
             llm=self.llm,
-            agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
+            tools=self.tools,
+            system_message="""You are a helpful AI assistant that can search through documents and perform calculations.
+            When searching documents, provide clear and concise summaries of the relevant information found.
+            When performing calculations, show your work and explain the steps taken."""
+        )
+        return AgentExecutor(
+            agent=agent,
+            tools=self.tools,
             verbose=True,
             handle_parsing_errors=True
         )
-        return agent
 
     async def run_agent(self, query: str) -> str:
         """Run the agent with a query."""
         try:
-            response = await self.agent.arun(query)
-            return response
+            response = await self.agent.ainvoke({"input": query})
+            return response["output"]
         except Exception as e:
             return f"Error running agent: {str(e)}"
 
