@@ -2,46 +2,6 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 
-class DocumentBase(BaseModel):
-    """Base document model."""
-    text: str = Field(..., description="The text content of the document")
-    metadata: Optional[Dict] = Field(default=None, description="Additional metadata for the document")
-
-class DocumentCreate(BaseModel):
-    """Model for creating a new document."""
-    text: str
-    metadata: Optional[Dict[str, Any]] = {}
-
-class DocumentResponse(BaseModel):
-    """Model for document response."""
-    id: str = Field(..., description="Unique identifier for the document")
-    text: str
-    metadata: Dict[str, Any]
-    embedding: List[float] = Field(..., description="Vector embedding of the document")
-
-class SearchQuery(BaseModel):
-    """Model for search queries."""
-    text: str = Field(..., description="The search query text")
-    limit: int = 5
-
-class SearchResult(BaseModel):
-    """Model for search results."""
-    text: str = Field(..., description="The text content of the found document")
-    score: float = Field(..., description="Similarity score of the match")
-    metadata: Optional[Dict] = Field(default=None, description="Additional metadata of the document")
-
-class SearchResponse(BaseModel):
-    """Model for search response."""
-    results: List[Dict[str, Any]] = Field(..., description="List of search results")
-
-class QuestionResponse(BaseModel):
-    """Model for question answering response."""
-    answer: str = Field(..., description="The generated answer to the question")
-    sources: List[Dict[str, Any]] = Field(..., description="Source documents used to generate the answer")
-
-class SimplifyRequest(BaseModel):
-    text: str
-
 class Document(BaseModel):
     """Schema for a document."""
     doc_id: str = Field(..., description="Unique identifier for the document")
@@ -59,6 +19,48 @@ class DocumentChunk(BaseModel):
     text: str = Field(..., description="Content of the chunk")
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
     created_at: datetime = Field(default_factory=datetime.utcnow, description="Creation timestamp")
+
+class DocumentCreate(BaseModel):
+    """Model for creating a new document."""
+    text: str
+    metadata: Optional[Dict[str, Any]] = {}
+
+class DocumentResponse(BaseModel):
+    """Model for document response."""
+    id: str = Field(..., description="Unique identifier for the document")
+    text: str
+    metadata: Dict[str, Any]
+    embedding: List[float] = Field(..., description="Vector embedding of the document")
+
+class DocumentProcessRequest(BaseModel):
+    """Request model for document processing."""
+    file_path: str = Field(..., description="Path to the document file")
+    metadata: Optional[Dict[str, Any]] = Field(default=None, description="Additional metadata for the document")
+
+class DocumentProcessResponse(BaseModel):
+    """Response model for document processing."""
+    doc_id: str = Field(..., description="Unique identifier for the processed document")
+    chunks: int = Field(..., description="Number of chunks the document was split into")
+    source: str = Field(..., description="Source file path")
+    metadata: Optional[Dict[str, Any]] = Field(default=None, description="Document metadata")
+
+class DocumentSearchRequest(BaseModel):
+    """Request model for document search."""
+    query: str = Field(..., description="Search query")
+    limit: int = Field(default=5, description="Maximum number of results to return")
+
+class DocumentSearchResponse(BaseModel):
+    """Response model for document search."""
+    results: List[Dict[str, Any]] = Field(..., description="Search results with text and metadata")
+    total: int = Field(..., description="Total number of results found")
+
+class DocumentChunksRequest(BaseModel):
+    """Request model for retrieving document chunks."""
+    doc_id: str = Field(..., description="Document ID to retrieve chunks for")
+
+class DocumentChunksResponse(BaseModel):
+    """Response model for document chunks."""
+    chunks: List[Dict[str, Any]] = Field(..., description="Document chunks with text and metadata")
 
 class ChatMessage(BaseModel):
     """Schema for a chat message."""
@@ -83,39 +85,7 @@ class ChatResponse(BaseModel):
 
 class ChatHistoryResponse(BaseModel):
     """Response model for chat history endpoint."""
-    id: str = Field(..., description="Unique identifier for the message")
-    text: str = Field(..., description="The message text")
-    role: str = Field(..., description="The role of the message sender (user/assistant)")
-    timestamp: str = Field(..., description="Timestamp of the message")
-
-class DocumentProcessRequest(BaseModel):
-    """Request model for document processing."""
-    file_path: str = Field(..., description="Path to the document file")
-    metadata: Optional[Dict[str, Any]] = Field(default=None, description="Additional metadata for the document")
-
-class DocumentProcessResponse(BaseModel):
-    """Response model for document processing."""
-    doc_id: str = Field(..., description="Unique identifier for the processed document")
-    chunks: int = Field(..., description="Number of chunks the document was split into")
-    source: str = Field(..., description="Source file path")
-    metadata: Optional[Dict[str, Any]] = Field(default=None, description="Document metadata")
-
-class DocumentSearchRequest(BaseModel):
-    """Request model for document search."""
-    query: str = Field(..., description="Search query")
-    limit: int = Field(default=5, description="Maximum number of results to return")
-
-class DocumentSearchResponse(BaseModel):
-    """Response model for document search."""
-    results: List[Dict[str, Any]] = Field(..., description="Search results with text and metadata")
-
-class DocumentChunksRequest(BaseModel):
-    """Request model for retrieving document chunks."""
-    doc_id: str = Field(..., description="Document ID to retrieve chunks for")
-
-class DocumentChunksResponse(BaseModel):
-    """Response model for document chunks."""
-    chunks: List[Dict[str, Any]] = Field(..., description="Document chunks with text and metadata")
+    messages: List[ChatMessage] = Field(..., description="List of chat messages")
 
 class AgentQueryRequest(BaseModel):
     """Request model for agent queries."""
@@ -125,7 +95,7 @@ class AgentQueryResponse(BaseModel):
     """Response model for agent queries."""
     response: str = Field(..., description="The agent's response")
     tools_used: List[str] = Field(default=[], description="List of tools used by the agent")
-    timestamp: str = Field(..., description="Timestamp of the response")
+    timestamp: datetime = Field(default_factory=datetime.utcnow, description="Timestamp of the response")
     error: Optional[str] = Field(None, description="Error message if any")
 
 class PromptRequest(BaseModel):
@@ -153,6 +123,29 @@ class StreamResponse(BaseModel):
     chunk: str = Field(..., description="A chunk of the streaming response")
     done: bool = Field(default=False, description="Whether this is the final chunk")
     error: Optional[str] = Field(None, description="Error message if any")
+
+class SearchQuery(BaseModel):
+    """Model for search queries."""
+    text: str = Field(..., description="The search query text")
+    limit: int = 5
+
+class SearchResult(BaseModel):
+    """Model for search results."""
+    text: str = Field(..., description="The text content of the found document")
+    score: float = Field(..., description="Similarity score of the match")
+    metadata: Optional[Dict] = Field(default=None, description="Additional metadata of the document")
+
+class SearchResponse(BaseModel):
+    """Model for search response."""
+    results: List[Dict[str, Any]] = Field(..., description="List of search results")
+
+class QuestionResponse(BaseModel):
+    """Model for question answering response."""
+    answer: str = Field(..., description="The generated answer to the question")
+    sources: List[Dict[str, Any]] = Field(..., description="Source documents used to generate the answer")
+
+class SimplifyRequest(BaseModel):
+    text: str
 
 class SearchRequest(BaseModel):
     """Schema for a search request."""
