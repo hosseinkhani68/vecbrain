@@ -2,11 +2,12 @@ from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain.memory import VectorStoreRetrieverMemory
 from langchain.chains import ConversationChain
 from langchain.prompts import PromptTemplate
-from langchain.vectorstores import Qdrant
+from langchain_community.vectorstores import Qdrant
 from langchain.schema import Document
 from app.config import get_settings
 from typing import List, Dict, Any
 import uuid
+from qdrant_client import QdrantClient
 
 settings = get_settings()
 
@@ -44,8 +45,14 @@ class LangChainService:
 
     def _init_vector_store(self):
         """Initialize Qdrant vector store."""
+        # Initialize Qdrant client
+        qdrant_client = QdrantClient(
+            url=settings.qdrant_url,
+            api_key=settings.qdrant_api_key
+        )
+        
         self.vector_store = Qdrant(
-            client=settings.qdrant_client,
+            client=qdrant_client,
             collection_name="conversations",
             embeddings=embeddings
         )

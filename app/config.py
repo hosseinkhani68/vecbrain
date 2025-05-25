@@ -4,14 +4,14 @@ import os
 from typing import Optional
 
 class Settings(BaseSettings):
-    """Application settings with secure API key handling."""
-    openai_api_key: Optional[str] = None
-    qdrant_url: Optional[str] = None
-    qdrant_api_key: Optional[str] = None
-    
+    """Application settings."""
+    openai_api_key: str
+    qdrant_url: str = "http://localhost:6333"  # Default Qdrant URL
+    qdrant_api_key: Optional[str] = None  # Optional API key for Qdrant
+
     class Config:
         env_file = ".env"
-        case_sensitive = True
+        env_file_encoding = "utf-8"
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
