@@ -76,6 +76,8 @@ class ChatRequest(BaseModel):
     """Schema for a chat request."""
     text: str = Field(..., description="Message text", max_length=500)
     context_id: Optional[str] = Field(None, description="Context ID for conversation grouping")
+    history: List[ChatMessage] = Field(default_factory=list, description="Chat history")
+    stream: bool = Field(default=False, description="Whether to stream the response")
 
 class ChatResponse(BaseModel):
     """Schema for a chat response."""
@@ -84,6 +86,7 @@ class ChatResponse(BaseModel):
     role: str = Field(default="assistant", description="Role of the response")
     timestamp: datetime = Field(default_factory=datetime.utcnow, description="Response timestamp")
     context_id: Optional[str] = Field(None, description="Context ID for conversation grouping")
+    history: List[ChatMessage] = Field(default_factory=list, description="Updated chat history")
 
 class ChatHistoryResponse(BaseModel):
     """Response model for chat history endpoint."""
@@ -139,18 +142,6 @@ class SearchResult(BaseModel):
     text: str = Field(..., description="The text content of the found document")
     score: float = Field(..., description="Similarity score of the match")
     metadata: Optional[Dict] = Field(default=None, description="Additional metadata of the document")
-
-class SearchResponse(BaseModel):
-    """Model for search response."""
-    results: List[Dict[str, Any]] = Field(..., description="List of search results")
-
-class QuestionResponse(BaseModel):
-    """Model for question answering response."""
-    answer: str = Field(..., description="The generated answer to the question")
-    sources: List[Dict[str, Any]] = Field(..., description="Source documents used to generate the answer")
-
-class SimplifyRequest(BaseModel):
-    text: str
 
 class SearchRequest(BaseModel):
     """Schema for a search request."""

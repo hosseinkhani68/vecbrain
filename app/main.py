@@ -350,39 +350,32 @@ async def get_chat_history(context_id: str = None):
     response_description="The chat response with context"
 )
 async def chat(request: ChatRequest):
-    """Handle interactive chat requests with conversation memory."""
+    """Chat with the AI assistant."""
     try:
-        response = await langchain_service.process_message(
-            text=request.text,
-            context_id=request.context_id
+        if request.stream:
+            return StreamingResponse(
+                generate(request.text, request.history),
+                media_type="text/event-stream"
+            )
+        
+        response = await langchain_service.get_chat_response(request.text)
+        return ChatResponse(
+            text=response,
+            history=request.history + [
+                ChatMessage(role="user", content=request.text),
+                ChatMessage(role="assistant", content=response)
+            ]
         )
-        return response
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post(
-    "/chat/stream",
-    response_class=StreamingResponse,
-    summary="Streaming chat endpoint",
-    description="""
-    Streaming chat endpoint that provides real-time responses.
-    The response is streamed token by token as they are generated.
-    """,
-)
-async def chat_stream(request: ChatRequest):
-    """Handle streaming chat requests."""
+async def generate(text: str, history: List[ChatMessage]):
+    """Generate streaming response."""
     try:
-        async def generate():
-            async for chunk in get_completion_stream(request.text, request.history):
-                yield f"data: {json.dumps({'chunk': chunk, 'done': False})}\n\n"
-            yield f"data: {json.dumps({'chunk': '', 'done': True})}\n\n"
-            
-        return StreamingResponse(
-            generate(),
-            media_type="text/event-stream"
-        )
+        async for chunk in get_completion_stream(text, history):
+            yield f"data: {chunk}\n\n"
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        yield f"data: Error: {str(e)}\n\n"
 
 @app.post(
     "/documents/process",
