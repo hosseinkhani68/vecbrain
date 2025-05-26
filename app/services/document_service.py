@@ -27,7 +27,7 @@ class DocumentService:
         self.vector_store = QdrantVectorStore(
             client=settings.qdrant_client,
             collection_name="documents",
-            embedding_function=self.embeddings.embed_query
+            embeddings=self.embeddings
         )
         self.text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=1000,
