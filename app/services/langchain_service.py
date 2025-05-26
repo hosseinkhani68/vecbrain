@@ -18,7 +18,7 @@ class LangChainService:
         self.vector_store = QdrantVectorStore(
             client=settings.qdrant_client,
             collection_name="documents",
-            embeddings=self.embeddings
+            embedding_function=self.embeddings.embed_query
         )
         self.text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=1000,
