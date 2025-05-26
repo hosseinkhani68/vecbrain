@@ -4,7 +4,8 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.chains import ConversationalRetrievalChain
 from langchain_openai import ChatOpenAI
 from app.config import get_settings
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
+from datetime import datetime
 import os
 
 settings = get_settings()
@@ -30,6 +31,23 @@ class LangChainService:
             temperature=0.7,
             openai_api_key=settings.openai_api_key
         )
+        self.chat_history: List[Dict[str, str]] = []
+
+    def get_chat_history(self) -> List[Dict[str, str]]:
+        """Get the current chat history."""
+        return self.chat_history
+
+    def add_to_chat_history(self, role: str, content: str) -> None:
+        """Add a message to the chat history."""
+        self.chat_history.append({
+            "role": role,
+            "content": content,
+            "timestamp": datetime.now().isoformat()
+        })
+
+    def clear_chat_history(self) -> None:
+        """Clear the chat history."""
+        self.chat_history = []
 
     async def process_document(self, file_path: str, metadata: Dict[str, Any] = None) -> Dict[str, Any]:
         """Process a document and store it in the vector store."""
@@ -86,7 +104,7 @@ class LangChainService:
         except Exception as e:
             raise Exception(f"Error searching documents: {str(e)}")
 
-    async def get_chat_response(self, query: str, chat_history: List[Dict[str, str]] = None) -> str:
+    async def get_chat_response(self, query: str) -> str:
         """Get a response from the chat model with document context."""
         try:
             # Create conversation chain
@@ -98,12 +116,20 @@ class LangChainService:
 
             # Format chat history
             formatted_history = []
-            if chat_history:
-                for msg in chat_history:
-                    formatted_history.append((msg["user"], msg["assistant"]))
+            for msg in self.chat_history:
+                if msg["role"] == "user":
+                    formatted_history.append((msg["content"], ""))
+                elif msg["role"] == "assistant":
+                    if formatted_history:
+                        formatted_history[-1] = (formatted_history[-1][0], msg["content"])
 
             # Get response
             result = chain({"question": query, "chat_history": formatted_history})
+            
+            # Add to chat history
+            self.add_to_chat_history("user", query)
+            self.add_to_chat_history("assistant", result["answer"])
+            
             return result["answer"]
         except Exception as e:
             raise Exception(f"Error getting chat response: {str(e)}") 
