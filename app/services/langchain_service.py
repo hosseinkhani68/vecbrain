@@ -33,8 +33,17 @@ class LangChainService:
         )
         self.chat_history: List[Dict[str, str]] = []
 
-    def get_chat_history(self) -> List[Dict[str, str]]:
-        """Get the current chat history."""
+    def get_chat_history(self, limit: Optional[int] = None) -> List[Dict[str, str]]:
+        """Get the current chat history.
+        
+        Args:
+            limit: Optional number of most recent messages to return. If None, returns all history.
+            
+        Returns:
+            List of chat messages, each containing role, content, and timestamp.
+        """
+        if limit is not None:
+            return self.chat_history[-limit:]
         return self.chat_history
 
     def add_to_chat_history(self, role: str, content: str) -> None:
