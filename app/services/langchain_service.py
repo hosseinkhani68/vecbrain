@@ -33,7 +33,7 @@ class LangChainService:
         )
         self.chat_history: List[Dict[str, str]] = []
 
-    def get_chat_history(self, limit: Optional[int] = None) -> List[Dict[str, str]]:
+    async def get_chat_history(self, limit: Optional[int] = None) -> List[Dict[str, str]]:
         """Get the current chat history.
         
         Args:
@@ -46,7 +46,7 @@ class LangChainService:
             return self.chat_history[-limit:]
         return self.chat_history
 
-    def add_to_chat_history(self, role: str, content: str) -> None:
+    async def add_to_chat_history(self, role: str, content: str) -> None:
         """Add a message to the chat history."""
         self.chat_history.append({
             "role": role,
@@ -54,7 +54,7 @@ class LangChainService:
             "timestamp": datetime.now().isoformat()
         })
 
-    def clear_chat_history(self) -> None:
+    async def clear_chat_history(self) -> None:
         """Clear the chat history."""
         self.chat_history = []
 
@@ -136,8 +136,8 @@ class LangChainService:
             result = chain({"question": query, "chat_history": formatted_history})
             
             # Add to chat history
-            self.add_to_chat_history("user", query)
-            self.add_to_chat_history("assistant", result["answer"])
+            await self.add_to_chat_history("user", query)
+            await self.add_to_chat_history("assistant", result["answer"])
             
             return result["answer"]
         except Exception as e:
