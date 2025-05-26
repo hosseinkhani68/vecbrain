@@ -7,7 +7,7 @@ from langchain_community.document_loaders import (
     UnstructuredHTMLLoader
 )
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_qdrant import QdrantVectorStore
+from langchain_community.vectorstores import Qdrant
 from langchain_openai import OpenAIEmbeddings
 from app.config import get_settings
 from app.models.schemas import Document, DocumentChunk
@@ -24,7 +24,7 @@ class DocumentService:
             model="text-embedding-3-small",
             openai_api_key=settings.openai_api_key
         )
-        self.vector_store = QdrantVectorStore(
+        self.vector_store = Qdrant(
             client=settings.qdrant_client,
             collection_name="documents",
             embeddings=self.embeddings
