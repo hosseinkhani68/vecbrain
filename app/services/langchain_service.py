@@ -120,7 +120,8 @@ class LangChainService:
             chain = ConversationalRetrievalChain.from_llm(
                 llm=self.llm,
                 retriever=self.vector_store.as_retriever(),
-                return_source_documents=True
+                return_source_documents=True,
+                verbose=True  # Add verbose mode for debugging
             )
 
             # Format chat history
@@ -132,13 +133,24 @@ class LangChainService:
                     if formatted_history:
                         formatted_history[-1] = (formatted_history[-1][0], msg["content"])
 
-            # Get response
-            result = chain({"question": query, "chat_history": formatted_history})
+            # Get response with error handling
+            try:
+                result = chain({"question": query, "chat_history": formatted_history})
+                if not result or "answer" not in result:
+                    # If no answer is generated, use the LLM directly
+                    response = await self.llm.ainvoke([{"role": "user", "content": query}])
+                    answer = response.content
+                else:
+                    answer = result["answer"]
+            except Exception as chain_error:
+                # Fallback to direct LLM response if chain fails
+                response = await self.llm.ainvoke([{"role": "user", "content": query}])
+                answer = response.content
             
             # Add to chat history
             await self.add_to_chat_history("user", query)
-            await self.add_to_chat_history("assistant", result["answer"])
+            await self.add_to_chat_history("assistant", answer)
             
-            return result["answer"]
+            return answer
         except Exception as e:
             raise Exception(f"Error getting chat response: {str(e)}") 
