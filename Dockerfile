@@ -25,10 +25,9 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 # Install Python dependencies in stages
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir numpy && \
-    pip install --no-cache-dir -r requirements.txt || \
-    (pip install --no-cache-dir -r requirements.txt --no-deps && \
-     pip install --no-cache-dir -r requirements.txt)
+    pip install --no-cache-dir numpy==1.24.3 && \
+    pip install --no-cache-dir -r requirements.txt --no-deps && \
+    pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY . .
