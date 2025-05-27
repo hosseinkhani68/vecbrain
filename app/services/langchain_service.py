@@ -44,14 +44,18 @@ class LangChainService:
             List of chat messages, each containing id, text, role, and timestamp.
         """
         try:
+            # Create filter for chat messages
+            filter_conditions = {
+                "type": "chat"
+            }
+            if context_id:
+                filter_conditions["context_id"] = context_id
+
             # Search for chat messages in Qdrant
             results = self.vector_store.similarity_search(
                 query="",  # Empty query to get all messages
                 k=100,  # Get last 100 messages
-                filter={
-                    "type": "chat",
-                    **({"context_id": context_id} if context_id else {})
-                }
+                filter=filter_conditions
             )
             
             # Convert results to chat messages
@@ -66,7 +70,7 @@ class LangChainService:
                         "context_id": doc.metadata.get("context_id")
                     })
             
-            # Sort by timestamp
+            # Sort by timestamp in ascending order
             messages.sort(key=lambda x: x["timestamp"])
             return messages
         except Exception as e:
@@ -79,7 +83,11 @@ class LangChainService:
             message_id = str(uuid.uuid4())
             timestamp = datetime.now().isoformat()
             
-            # Store in Qdrant
+            # Ensure context_id is set
+            if not context_id:
+                context_id = str(uuid.uuid4())
+            
+            # Store in Qdrant with all required metadata
             self.vector_store.add_texts(
                 texts=[content],
                 metadatas=[{
@@ -87,11 +95,22 @@ class LangChainService:
                     "message_id": message_id,
                     "role": role,
                     "timestamp": timestamp,
-                    "context_id": context_id
+                    "context_id": context_id,
+                    "content": content  # Store content in metadata for easier retrieval
                 }]
             )
+            
+            # Also add to in-memory history for current session
+            self.chat_history.append({
+                "id": message_id,
+                "text": content,
+                "role": role,
+                "timestamp": timestamp,
+                "context_id": context_id
+            })
         except Exception as e:
             print(f"Error adding to chat history: {str(e)}")
+            raise e  # Re-raise the exception to handle it in the API endpoint
 
     async def clear_chat_history(self, context_id: Optional[str] = None) -> None:
         """Clear the chat history from Qdrant."""

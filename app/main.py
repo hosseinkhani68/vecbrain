@@ -355,10 +355,14 @@ async def chat(request: ChatRequest):
         # Ensure history is initialized if not provided
         if not hasattr(request, 'history'):
             request.history = []
+            
+        # Ensure context_id is set
+        if not request.context_id:
+            request.context_id = str(uuid.uuid4())
         
         if request.stream:
             return StreamingResponse(
-                generate(request.text, request.history),
+                generate(request.text, request.history, request.context_id),
                 media_type="text/event-stream"
             )
         
@@ -401,7 +405,7 @@ async def chat(request: ChatRequest):
             context_id=request.context_id
         )
         
-        # Add messages to chat history
+        # Add messages to chat history with context_id
         await langchain_service.add_to_chat_history("user", request.text, request.context_id)
         await langchain_service.add_to_chat_history("assistant", combined_response.strip(), request.context_id)
         
@@ -415,7 +419,7 @@ async def chat(request: ChatRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-async def generate(text: str, history: List[ChatMessage]):
+async def generate(text: str, history: List[ChatMessage], context_id: str):
     """Generate streaming response."""
     try:
         # Convert history to the format expected by the streaming function
