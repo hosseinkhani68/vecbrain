@@ -40,16 +40,7 @@ class LangChainService:
         limit: int = 10,
         offset: int = 0
     ) -> List[Dict[str, str]]:
-        """Get the chat history from Qdrant with pagination.
-        
-        Args:
-            context_id: Optional context ID to filter messages by conversation.
-            limit: Number of messages to return (default: 10)
-            offset: Number of messages to skip (default: 0)
-            
-        Returns:
-            List of chat messages, each containing id, text, role, and timestamp.
-        """
+        """Get the chat history from Qdrant with pagination."""
         try:
             # Create filter for chat messages
             filter_conditions = {
@@ -58,23 +49,7 @@ class LangChainService:
             if context_id:
                 filter_conditions["context_id"] = context_id
 
-            # First, get total count for pagination
-            count_result = await self.vector_store.client.scroll(
-                collection_name=self.vector_store.collection_name,
-                filter=filter_conditions,
-                limit=1,  # We only need the count
-                with_payload=False,
-                with_vectors=False,
-                timeout=5.0
-            )
-            
-            total_messages = len(count_result[0]) if count_result and count_result[0] else 0
-            
-            # If offset is beyond total messages, return empty list
-            if offset >= total_messages:
-                return []
-
-            # Use Qdrant's search method with pagination
+            # Use Qdrant's search method with pagination and optimized parameters
             results = await self.vector_store.client.scroll(
                 collection_name=self.vector_store.collection_name,
                 filter=filter_conditions,
@@ -82,13 +57,13 @@ class LangChainService:
                 offset=offset,
                 with_payload=True,
                 with_vectors=False,
-                timeout=15.0
+                timeout=5.0  # Reduced timeout for faster response
             )
 
             if not results or not results[0]:
                 return []
 
-            # Convert results to chat messages
+            # Convert results to chat messages more efficiently
             messages = []
             for point in results[0]:
                 payload = point.payload
