@@ -359,12 +359,28 @@ async def chat(request: ChatRequest):
             )
         
         response = await langchain_service.get_chat_response(request.text)
-        return ChatResponse(
+        
+        # Create properly formatted chat messages
+        user_message = ChatMessage(
+            id=str(uuid.uuid4()),
+            text=request.text,
+            role="user",
+            context_id=request.context_id
+        )
+        
+        assistant_message = ChatMessage(
+            id=str(uuid.uuid4()),
             text=response,
-            history=request.history + [
-                ChatMessage(role="user", content=request.text),
-                ChatMessage(role="assistant", content=response)
-            ]
+            role="assistant",
+            context_id=request.context_id
+        )
+        
+        return ChatResponse(
+            id=str(uuid.uuid4()),
+            text=response,
+            role="assistant",
+            context_id=request.context_id,
+            history=request.history + [user_message, assistant_message]
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
