@@ -7,6 +7,7 @@ from app.config import get_settings
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 import os
+import uuid
 
 settings = get_settings()
 
@@ -49,8 +50,9 @@ class LangChainService:
     async def add_to_chat_history(self, role: str, content: str) -> None:
         """Add a message to the chat history."""
         self.chat_history.append({
+            "id": str(uuid.uuid4()),
+            "text": content,
             "role": role,
-            "content": content,
             "timestamp": datetime.now().isoformat()
         })
 
@@ -128,10 +130,10 @@ class LangChainService:
             formatted_history = []
             for msg in self.chat_history:
                 if msg["role"] == "user":
-                    formatted_history.append((msg["content"], ""))
+                    formatted_history.append((msg["text"], ""))
                 elif msg["role"] == "assistant":
                     if formatted_history:
-                        formatted_history[-1] = (formatted_history[-1][0], msg["content"])
+                        formatted_history[-1] = (formatted_history[-1][0], msg["text"])
 
             # Get response with error handling
             try:
