@@ -156,4 +156,9 @@ class SearchResponse(BaseModel):
 class QuestionResponse(BaseModel):
     """Schema for question answering response."""
     answer: str = Field(..., description="The generated answer")
-    sources: List[Dict[str, Any]] = Field(..., description="Source documents used to generate the answer") 
+    sources: List[Dict[str, Any]] = Field(..., description="Source documents used to generate the answer")
+
+class SimplifyRequest(BaseModel):
+    """Schema for text simplification request."""
+    text: str = Field(..., description="The text to be simplified")
+    context_id: Optional[str] = Field(None, description="Context ID for conversation grouping") 
