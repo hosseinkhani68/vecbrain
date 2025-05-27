@@ -352,6 +352,10 @@ async def get_chat_history(context_id: str = None):
 async def chat(request: ChatRequest):
     """Chat with the AI assistant."""
     try:
+        # Ensure history is initialized if not provided
+        if not hasattr(request, 'history'):
+            request.history = []
+        
         if request.stream:
             return StreamingResponse(
                 generate(request.text, request.history),
