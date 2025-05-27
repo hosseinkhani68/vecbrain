@@ -362,8 +362,30 @@ async def chat(request: ChatRequest):
                 media_type="text/event-stream"
             )
         
-        response = await langchain_service.get_chat_response(request.text)
-        
+        # Split long text into chunks if needed
+        text_chunks = []
+        if len(request.text) > 500:
+            # Split by sentences or paragraphs
+            sentences = request.text.split('. ')
+            current_chunk = ""
+            for sentence in sentences:
+                if len(current_chunk) + len(sentence) + 2 <= 500:  # +2 for '. '
+                    current_chunk += sentence + '. '
+                else:
+                    if current_chunk:
+                        text_chunks.append(current_chunk.strip())
+                    current_chunk = sentence + '. '
+            if current_chunk:
+                text_chunks.append(current_chunk.strip())
+        else:
+            text_chunks = [request.text]
+
+        # Process each chunk and combine responses
+        combined_response = ""
+        for chunk in text_chunks:
+            response = await langchain_service.get_chat_response(chunk)
+            combined_response += response + " "
+
         # Create properly formatted chat messages
         user_message = ChatMessage(
             id=str(uuid.uuid4()),
@@ -374,14 +396,14 @@ async def chat(request: ChatRequest):
         
         assistant_message = ChatMessage(
             id=str(uuid.uuid4()),
-            text=response,
+            text=combined_response.strip(),
             role="assistant",
             context_id=request.context_id
         )
         
         return ChatResponse(
             id=str(uuid.uuid4()),
-            text=response,
+            text=combined_response.strip(),
             role="assistant",
             context_id=request.context_id,
             history=request.history + [user_message, assistant_message]
@@ -401,10 +423,29 @@ async def generate(text: str, history: List[ChatMessage]):
                 if formatted_history:
                     formatted_history[-1] = (formatted_history[-1][0], msg.text)
 
-        # Get streaming response from OpenAI
-        async for chunk in get_completion_stream(text, formatted_history):
-            if chunk:
-                yield f"data: {json.dumps({'chunk': chunk, 'done': False})}\n\n"
+        # Split long text into chunks if needed
+        text_chunks = []
+        if len(text) > 500:
+            # Split by sentences or paragraphs
+            sentences = text.split('. ')
+            current_chunk = ""
+            for sentence in sentences:
+                if len(current_chunk) + len(sentence) + 2 <= 500:  # +2 for '. '
+                    current_chunk += sentence + '. '
+                else:
+                    if current_chunk:
+                        text_chunks.append(current_chunk.strip())
+                    current_chunk = sentence + '. '
+            if current_chunk:
+                text_chunks.append(current_chunk.strip())
+        else:
+            text_chunks = [text]
+
+        # Process each chunk and stream responses
+        for chunk in text_chunks:
+            async for response_chunk in get_completion_stream(chunk, formatted_history):
+                if response_chunk:
+                    yield f"data: {json.dumps({'chunk': response_chunk, 'done': False})}\n\n"
         
         # Send completion signal
         yield f"data: {json.dumps({'chunk': '', 'done': True})}\n\n"
