@@ -375,7 +375,16 @@ async def get_chat_history(
 async def chat(request: ChatRequest):
     """Chat endpoint with streaming support."""
     try:
-        print(f"Received chat request - context_id: {request.context_id}, stream: {request.stream}")
+        # Log detailed request information
+        print("\n=== Incoming Chat Request ===")
+        print(f"Request ID: {str(uuid.uuid4())}")
+        print(f"Timestamp: {datetime.now().isoformat()}")
+        print(f"Context ID: {request.context_id}")
+        print(f"Stream Mode: {request.stream}")
+        print(f"Text Length: {len(request.text) if request.text else 0}")
+        print(f"Text Preview: {request.text[:100] + '...' if request.text and len(request.text) > 100 else request.text}")
+        print("Headers:", request.headers if hasattr(request, 'headers') else "No headers available")
+        print("===========================\n")
         
         # Initialize conversation history if needed
         if not langchain_service.chat_history:
@@ -395,26 +404,32 @@ async def chat(request: ChatRequest):
             if current_chunk:
                 chunks.append(current_chunk)
             
+            print(f"Split text into {len(chunks)} chunks")
+            
             # Process each chunk
             responses = []
-            for chunk in chunks:
+            for i, chunk in enumerate(chunks):
                 try:
+                    print(f"Processing chunk {i+1}/{len(chunks)}")
                     # Set a timeout for each chunk
                     async with asyncio.timeout(15.0):  # 15 second timeout per chunk
                         response = await langchain_service.get_chat_response(chunk)
                         responses.append(response)
+                        print(f"Chunk {i+1} processed successfully")
                 except asyncio.TimeoutError:
-                    print(f"Timeout processing chunk: {chunk[:50]}...")
+                    print(f"Timeout processing chunk {i+1}: {chunk[:50]}...")
                     responses.append("I apologize, but this part of your message took too long to process. Please try again with a shorter message.")
                 except Exception as e:
-                    print(f"Error processing chunk: {str(e)}")
+                    print(f"Error processing chunk {i+1}: {str(e)}")
                     responses.append("I apologize, but I encountered an error processing this part of your message.")
             
             # Combine responses
             final_response = " ".join(responses)
+            print(f"Final response length: {len(final_response)}")
             
             # Return streaming response if requested
             if request.stream:
+                print("Returning streaming response")
                 async def generate():
                     for chunk in final_response.split():
                         yield f"data: {chunk}\n\n"
@@ -425,8 +440,10 @@ async def chat(request: ChatRequest):
                     media_type="text/event-stream"
                 )
             
+            print("Returning regular response")
             return {"response": final_response}
         
+        print("No text provided in request")
         return {"response": "No text provided"}
     
     except Exception as e:
