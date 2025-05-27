@@ -55,10 +55,10 @@ class LangChainService:
             results = await self.vector_store.client.scroll(
                 collection_name=self.vector_store.collection_name,
                 filter=filter_conditions,
-                limit=50,  # Reduced limit for better performance
+                limit=10,  # Reduced limit for better performance
                 with_payload=True,
                 with_vectors=False,
-                timeout=5.0  # Add timeout
+                timeout=15.0  # Increased timeout
             )
 
             if not results or not results[0]:
@@ -84,6 +84,7 @@ class LangChainService:
             return messages
         except Exception as e:
             print(f"Error getting chat history: {str(e)}")
+            # Return empty list instead of raising exception to prevent API errors
             return []
 
     async def add_to_chat_history(self, role: str, content: str, context_id: Optional[str] = None) -> None:

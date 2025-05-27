@@ -335,10 +335,10 @@ Simplified text:"""
 async def get_chat_history(context_id: str = None):
     """Get the chat history."""
     try:
-        # Add timeout handling
+        # Add timeout handling with increased timeout
         messages = await asyncio.wait_for(
             langchain_service.get_chat_history(context_id),
-            timeout=10.0  # 10 second timeout
+            timeout=20.0  # Increased timeout to 20 seconds
         )
         
         if not messages:
@@ -346,15 +346,13 @@ async def get_chat_history(context_id: str = None):
             
         return [ChatHistoryResponse(messages=messages)]
     except asyncio.TimeoutError:
-        raise HTTPException(
-            status_code=504,
-            detail="Request timed out while fetching chat history"
-        )
+        # Log the timeout and return empty response instead of error
+        print("Request timed out while fetching chat history")
+        return [ChatHistoryResponse(messages=[])]
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error retrieving chat history: {str(e)}"
-        )
+        # Log the error and return empty response instead of error
+        print(f"Error retrieving chat history: {str(e)}")
+        return [ChatHistoryResponse(messages=[])]
 
 @app.post(
     "/chat",
