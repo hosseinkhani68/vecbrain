@@ -335,7 +335,7 @@ async def get_chat_history(context_id: str = None):
     """Get the chat history."""
     try:
         messages = await langchain_service.get_chat_history(context_id)
-        return messages
+        return [ChatHistoryResponse(messages=messages)]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -400,6 +400,10 @@ async def chat(request: ChatRequest):
             role="assistant",
             context_id=request.context_id
         )
+        
+        # Add messages to chat history
+        await langchain_service.add_to_chat_history("user", request.text, request.context_id)
+        await langchain_service.add_to_chat_history("assistant", combined_response.strip(), request.context_id)
         
         return ChatResponse(
             id=str(uuid.uuid4()),

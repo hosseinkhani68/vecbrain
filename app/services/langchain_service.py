@@ -34,31 +34,77 @@ class LangChainService:
         )
         self.chat_history: List[Dict[str, str]] = []
 
-    async def get_chat_history(self, limit: Optional[int] = None) -> List[Dict[str, str]]:
-        """Get the current chat history.
+    async def get_chat_history(self, context_id: Optional[str] = None) -> List[Dict[str, str]]:
+        """Get the chat history from Qdrant.
         
         Args:
-            limit: Optional number of most recent messages to return. If None, returns all history.
+            context_id: Optional context ID to filter messages by conversation.
             
         Returns:
-            List of chat messages, each containing role, content, and timestamp.
+            List of chat messages, each containing id, text, role, and timestamp.
         """
-        if limit is not None:
-            return self.chat_history[-limit:]
-        return self.chat_history
+        try:
+            # Search for chat messages in Qdrant
+            results = self.vector_store.similarity_search(
+                query="",  # Empty query to get all messages
+                k=100,  # Get last 100 messages
+                filter={
+                    "type": "chat",
+                    **({"context_id": context_id} if context_id else {})
+                }
+            )
+            
+            # Convert results to chat messages
+            messages = []
+            for doc in results:
+                if "type" in doc.metadata and doc.metadata["type"] == "chat":
+                    messages.append({
+                        "id": doc.metadata.get("message_id", str(uuid.uuid4())),
+                        "text": doc.page_content,
+                        "role": doc.metadata.get("role", "user"),
+                        "timestamp": doc.metadata.get("timestamp", datetime.now().isoformat()),
+                        "context_id": doc.metadata.get("context_id")
+                    })
+            
+            # Sort by timestamp
+            messages.sort(key=lambda x: x["timestamp"])
+            return messages
+        except Exception as e:
+            print(f"Error getting chat history: {str(e)}")
+            return []
 
-    async def add_to_chat_history(self, role: str, content: str) -> None:
-        """Add a message to the chat history."""
-        self.chat_history.append({
-            "id": str(uuid.uuid4()),
-            "text": content,
-            "role": role,
-            "timestamp": datetime.now().isoformat()
-        })
+    async def add_to_chat_history(self, role: str, content: str, context_id: Optional[str] = None) -> None:
+        """Add a message to the chat history in Qdrant."""
+        try:
+            message_id = str(uuid.uuid4())
+            timestamp = datetime.now().isoformat()
+            
+            # Store in Qdrant
+            self.vector_store.add_texts(
+                texts=[content],
+                metadatas=[{
+                    "type": "chat",
+                    "message_id": message_id,
+                    "role": role,
+                    "timestamp": timestamp,
+                    "context_id": context_id
+                }]
+            )
+        except Exception as e:
+            print(f"Error adding to chat history: {str(e)}")
 
-    async def clear_chat_history(self) -> None:
-        """Clear the chat history."""
-        self.chat_history = []
+    async def clear_chat_history(self, context_id: Optional[str] = None) -> None:
+        """Clear the chat history from Qdrant."""
+        try:
+            # Delete messages from Qdrant
+            self.vector_store.delete(
+                filter={
+                    "type": "chat",
+                    **({"context_id": context_id} if context_id else {})
+                }
+            )
+        except Exception as e:
+            print(f"Error clearing chat history: {str(e)}")
 
     async def process_document(self, file_path: str, metadata: Dict[str, Any] = None) -> Dict[str, Any]:
         """Process a document and store it in the vector store."""

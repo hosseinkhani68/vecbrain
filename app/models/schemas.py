@@ -74,7 +74,7 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     """Schema for a chat request."""
-    text: str = Field(..., description="Message text", max_length=500)
+    text: str = Field(..., description="Message text", max_length=4000)
     context_id: Optional[str] = Field(None, description="Context ID for conversation grouping")
     history: List[ChatMessage] = Field(default_factory=list, description="Chat history")
     stream: bool = Field(default=False, description="Whether to stream the response")
