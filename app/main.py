@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from app.services import openai, qdrant
@@ -37,6 +37,8 @@ import shutil
 import json
 from app.services.openai import get_completion_stream
 import asyncio
+import logging
+import time
 
 app = FastAPI(
     title="VecBrain API",
@@ -65,6 +67,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],  # Allows all methods
     allow_headers=["*"],  # Allows all headers
+    expose_headers=["*"]  # Expose all headers
 )
 
 # Initialize LangChain service
@@ -78,6 +81,44 @@ agent_service = AgentService(document_service)
 
 # Initialize prompt service
 prompt_service = PromptService()
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Add request logging middleware
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start_time = time.time()
+    
+    # Log request details
+    logger.info(f"\n{'='*50}")
+    logger.info(f"Request started: {request.method} {request.url}")
+    logger.info(f"Headers: {dict(request.headers)}")
+    
+    # Try to log request body for POST requests
+    if request.method == "POST":
+        try:
+            body = await request.body()
+            if body:
+                try:
+                    body_json = json.loads(body)
+                    logger.info(f"Request body: {json.dumps(body_json, indent=2)}")
+                except:
+                    logger.info(f"Request body: {body.decode()}")
+        except:
+            logger.info("Could not read request body")
+    
+    # Process the request
+    response = await call_next(request)
+    
+    # Log response details
+    process_time = time.time() - start_time
+    logger.info(f"Request completed in {process_time:.2f}s")
+    logger.info(f"Response status: {response.status_code}")
+    logger.info(f"{'='*50}\n")
+    
+    return response
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
@@ -376,15 +417,13 @@ async def chat(request: ChatRequest):
     """Chat endpoint with streaming support."""
     try:
         # Log detailed request information
-        print("\n=== Incoming Chat Request ===")
-        print(f"Request ID: {str(uuid.uuid4())}")
-        print(f"Timestamp: {datetime.now().isoformat()}")
-        print(f"Context ID: {request.context_id}")
-        print(f"Stream Mode: {request.stream}")
-        print(f"Text Length: {len(request.text) if request.text else 0}")
-        print(f"Text Preview: {request.text[:100] + '...' if request.text and len(request.text) > 100 else request.text}")
-        print("Headers:", request.headers if hasattr(request, 'headers') else "No headers available")
-        print("===========================\n")
+        logger.info("\n=== Incoming Chat Request ===")
+        logger.info(f"Request ID: {str(uuid.uuid4())}")
+        logger.info(f"Timestamp: {datetime.now().isoformat()}")
+        logger.info(f"Context ID: {request.context_id}")
+        logger.info(f"Stream Mode: {request.stream}")
+        logger.info(f"Text Length: {len(request.text) if request.text else 0}")
+        logger.info(f"Text Preview: {request.text[:100] + '...' if request.text and len(request.text) > 100 else request.text}")
         
         # Initialize conversation history if needed
         if not langchain_service.chat_history:
@@ -404,32 +443,32 @@ async def chat(request: ChatRequest):
             if current_chunk:
                 chunks.append(current_chunk)
             
-            print(f"Split text into {len(chunks)} chunks")
+            logger.info(f"Split text into {len(chunks)} chunks")
             
             # Process each chunk
             responses = []
             for i, chunk in enumerate(chunks):
                 try:
-                    print(f"Processing chunk {i+1}/{len(chunks)}")
+                    logger.info(f"Processing chunk {i+1}/{len(chunks)}")
                     # Set a timeout for each chunk
                     async with asyncio.timeout(15.0):  # 15 second timeout per chunk
                         response = await langchain_service.get_chat_response(chunk)
                         responses.append(response)
-                        print(f"Chunk {i+1} processed successfully")
+                        logger.info(f"Chunk {i+1} processed successfully")
                 except asyncio.TimeoutError:
-                    print(f"Timeout processing chunk {i+1}: {chunk[:50]}...")
+                    logger.error(f"Timeout processing chunk {i+1}: {chunk[:50]}...")
                     responses.append("I apologize, but this part of your message took too long to process. Please try again with a shorter message.")
                 except Exception as e:
-                    print(f"Error processing chunk {i+1}: {str(e)}")
+                    logger.error(f"Error processing chunk {i+1}: {str(e)}")
                     responses.append("I apologize, but I encountered an error processing this part of your message.")
             
             # Combine responses
             final_response = " ".join(responses)
-            print(f"Final response length: {len(final_response)}")
+            logger.info(f"Final response length: {len(final_response)}")
             
             # Return streaming response if requested
             if request.stream:
-                print("Returning streaming response")
+                logger.info("Returning streaming response")
                 async def generate():
                     for chunk in final_response.split():
                         yield f"data: {chunk}\n\n"
@@ -440,14 +479,14 @@ async def chat(request: ChatRequest):
                     media_type="text/event-stream"
                 )
             
-            print("Returning regular response")
+            logger.info("Returning regular response")
             return {"response": final_response}
         
-        print("No text provided in request")
+        logger.info("No text provided in request")
         return {"response": "No text provided"}
     
     except Exception as e:
-        print(f"Error in chat endpoint: {str(e)}")
+        logger.error(f"Error in chat endpoint: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail=f"Error processing chat request: {str(e)}"
