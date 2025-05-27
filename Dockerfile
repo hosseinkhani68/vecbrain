@@ -10,6 +10,10 @@ RUN apt-get update && apt-get install -y \
     python3-dev \
     libmagic1 \
     tesseract-ocr \
+    libtesseract-dev \
+    libleptonica-dev \
+    pkg-config \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first to leverage Docker cache
@@ -19,9 +23,12 @@ COPY requirements.txt .
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Install Python dependencies
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+# Install Python dependencies in stages
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    pip install --no-cache-dir numpy && \
+    pip install --no-cache-dir -r requirements.txt || \
+    (pip install --no-cache-dir -r requirements.txt --no-deps && \
+     pip install --no-cache-dir -r requirements.txt)
 
 # Copy application code
 COPY . .
