@@ -34,11 +34,18 @@ class LangChainService:
         )
         self.chat_history: List[Dict[str, str]] = []
 
-    async def get_chat_history(self, context_id: Optional[str] = None) -> List[Dict[str, str]]:
-        """Get the chat history from Qdrant.
+    async def get_chat_history(
+        self,
+        context_id: Optional[str] = None,
+        limit: int = 10,
+        offset: int = 0
+    ) -> List[Dict[str, str]]:
+        """Get the chat history from Qdrant with pagination.
         
         Args:
             context_id: Optional context ID to filter messages by conversation.
+            limit: Number of messages to return (default: 10)
+            offset: Number of messages to skip (default: 0)
             
         Returns:
             List of chat messages, each containing id, text, role, and timestamp.
@@ -51,20 +58,37 @@ class LangChainService:
             if context_id:
                 filter_conditions["context_id"] = context_id
 
-            # Use Qdrant's search method with optimized parameters
+            # First, get total count for pagination
+            count_result = await self.vector_store.client.scroll(
+                collection_name=self.vector_store.collection_name,
+                filter=filter_conditions,
+                limit=1,  # We only need the count
+                with_payload=False,
+                with_vectors=False,
+                timeout=5.0
+            )
+            
+            total_messages = len(count_result[0]) if count_result and count_result[0] else 0
+            
+            # If offset is beyond total messages, return empty list
+            if offset >= total_messages:
+                return []
+
+            # Use Qdrant's search method with pagination
             results = await self.vector_store.client.scroll(
                 collection_name=self.vector_store.collection_name,
                 filter=filter_conditions,
-                limit=10,  # Reduced limit for better performance
+                limit=limit,
+                offset=offset,
                 with_payload=True,
                 with_vectors=False,
-                timeout=15.0  # Increased timeout
+                timeout=15.0
             )
 
             if not results or not results[0]:
                 return []
 
-            # Convert results to chat messages more efficiently
+            # Convert results to chat messages
             messages = []
             for point in results[0]:
                 payload = point.payload
@@ -84,7 +108,6 @@ class LangChainService:
             return messages
         except Exception as e:
             print(f"Error getting chat history: {str(e)}")
-            # Return empty list instead of raising exception to prevent API errors
             return []
 
     async def add_to_chat_history(self, role: str, content: str, context_id: Optional[str] = None) -> None:

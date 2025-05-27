@@ -330,15 +330,30 @@ Simplified text:"""
     "/chat-history",
     response_model=List[ChatHistoryResponse],
     summary="Get chat history",
-    description="Retrieve the chat history with simplified texts."
+    description="""
+    Retrieve the chat history with pagination support.
+    
+    Parameters:
+    - context_id: Optional conversation ID to filter messages
+    - limit: Number of messages to return (default: 10)
+    - offset: Number of messages to skip (default: 0)
+    """
 )
-async def get_chat_history(context_id: str = None):
-    """Get the chat history."""
+async def get_chat_history(
+    context_id: str = None,
+    limit: int = 10,
+    offset: int = 0
+):
+    """Get the chat history with pagination."""
     try:
         # Add timeout handling with increased timeout
         messages = await asyncio.wait_for(
-            langchain_service.get_chat_history(context_id),
-            timeout=20.0  # Increased timeout to 20 seconds
+            langchain_service.get_chat_history(
+                context_id=context_id,
+                limit=limit,
+                offset=offset
+            ),
+            timeout=20.0
         )
         
         if not messages:
@@ -346,11 +361,9 @@ async def get_chat_history(context_id: str = None):
             
         return [ChatHistoryResponse(messages=messages)]
     except asyncio.TimeoutError:
-        # Log the timeout and return empty response instead of error
         print("Request timed out while fetching chat history")
         return [ChatHistoryResponse(messages=[])]
     except Exception as e:
-        # Log the error and return empty response instead of error
         print(f"Error retrieving chat history: {str(e)}")
         return [ChatHistoryResponse(messages=[])]
 
