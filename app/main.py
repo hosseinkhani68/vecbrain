@@ -371,127 +371,70 @@ async def get_chat_history(
         print(f"Error retrieving chat history: {str(e)}")
         return [ChatHistoryResponse(messages=[])]
 
-@app.post(
-    "/chat",
-    response_model=ChatResponse,
-    summary="Interactive chat endpoint",
-    description="""
-    Interactive chat endpoint that maintains conversation context and memory.
-    The system will remember previous messages and use them to provide more contextual responses.
-    """,
-    response_description="The chat response with context"
-)
+@app.post("/chat")
 async def chat(request: ChatRequest):
-    """Chat with the AI assistant."""
+    """Chat endpoint with streaming support."""
     try:
-        # Ensure history is initialized if not provided
-        if not hasattr(request, 'history'):
-            request.history = []
+        print(f"Received chat request - context_id: {request.context_id}, stream: {request.stream}")
+        
+        # Initialize conversation history if needed
+        if not langchain_service.chat_history:
+            langchain_service.chat_history = []
+        
+        # Process text input
+        if request.text:
+            # Split long text into chunks if needed
+            chunks = []
+            current_chunk = ""
+            for word in request.text.split():
+                if len(current_chunk) + len(word) + 1 <= 500:  # 500 char limit per chunk
+                    current_chunk += " " + word if current_chunk else word
+                else:
+                    chunks.append(current_chunk)
+                    current_chunk = word
+            if current_chunk:
+                chunks.append(current_chunk)
             
-        # Ensure context_id is set
-        if not request.context_id:
-            request.context_id = str(uuid.uuid4())
+            # Process each chunk
+            responses = []
+            for chunk in chunks:
+                try:
+                    # Set a timeout for each chunk
+                    async with asyncio.timeout(15.0):  # 15 second timeout per chunk
+                        response = await langchain_service.get_chat_response(chunk)
+                        responses.append(response)
+                except asyncio.TimeoutError:
+                    print(f"Timeout processing chunk: {chunk[:50]}...")
+                    responses.append("I apologize, but this part of your message took too long to process. Please try again with a shorter message.")
+                except Exception as e:
+                    print(f"Error processing chunk: {str(e)}")
+                    responses.append("I apologize, but I encountered an error processing this part of your message.")
+            
+            # Combine responses
+            final_response = " ".join(responses)
+            
+            # Return streaming response if requested
+            if request.stream:
+                async def generate():
+                    for chunk in final_response.split():
+                        yield f"data: {chunk}\n\n"
+                        await asyncio.sleep(0.1)  # Small delay between chunks
+                
+                return StreamingResponse(
+                    generate(),
+                    media_type="text/event-stream"
+                )
+            
+            return {"response": final_response}
         
-        if request.stream:
-            return StreamingResponse(
-                generate(request.text, request.history, request.context_id),
-                media_type="text/event-stream"
-            )
-        
-        # Split long text into chunks if needed
-        text_chunks = []
-        if len(request.text) > 500:
-            # Split by sentences or paragraphs
-            sentences = request.text.split('. ')
-            current_chunk = ""
-            for sentence in sentences:
-                if len(current_chunk) + len(sentence) + 2 <= 500:  # +2 for '. '
-                    current_chunk += sentence + '. '
-                else:
-                    if current_chunk:
-                        text_chunks.append(current_chunk.strip())
-                    current_chunk = sentence + '. '
-            if current_chunk:
-                text_chunks.append(current_chunk.strip())
-        else:
-            text_chunks = [request.text]
-
-        # Process each chunk and combine responses
-        combined_response = ""
-        for chunk in text_chunks:
-            response = await langchain_service.get_chat_response(chunk)
-            combined_response += response + " "
-
-        # Create properly formatted chat messages
-        user_message = ChatMessage(
-            id=str(uuid.uuid4()),
-            text=request.text,
-            role="user",
-            context_id=request.context_id
-        )
-        
-        assistant_message = ChatMessage(
-            id=str(uuid.uuid4()),
-            text=combined_response.strip(),
-            role="assistant",
-            context_id=request.context_id
-        )
-        
-        # Add messages to chat history with context_id
-        await langchain_service.add_to_chat_history("user", request.text, request.context_id)
-        await langchain_service.add_to_chat_history("assistant", combined_response.strip(), request.context_id)
-        
-        return ChatResponse(
-            id=str(uuid.uuid4()),
-            text=combined_response.strip(),
-            role="assistant",
-            context_id=request.context_id,
-            history=request.history + [user_message, assistant_message]
-        )
+        return {"response": "No text provided"}
+    
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-async def generate(text: str, history: List[ChatMessage], context_id: str):
-    """Generate streaming response."""
-    try:
-        # Convert history to the format expected by the streaming function
-        formatted_history = []
-        for msg in history:
-            if msg.role == "user":
-                formatted_history.append((msg.text, ""))
-            elif msg.role == "assistant":
-                if formatted_history:
-                    formatted_history[-1] = (formatted_history[-1][0], msg.text)
-
-        # Split long text into chunks if needed
-        text_chunks = []
-        if len(text) > 500:
-            # Split by sentences or paragraphs
-            sentences = text.split('. ')
-            current_chunk = ""
-            for sentence in sentences:
-                if len(current_chunk) + len(sentence) + 2 <= 500:  # +2 for '. '
-                    current_chunk += sentence + '. '
-                else:
-                    if current_chunk:
-                        text_chunks.append(current_chunk.strip())
-                    current_chunk = sentence + '. '
-            if current_chunk:
-                text_chunks.append(current_chunk.strip())
-        else:
-            text_chunks = [text]
-
-        # Process each chunk and stream responses
-        for chunk in text_chunks:
-            async for response_chunk in get_completion_stream(chunk, formatted_history):
-                if response_chunk:
-                    yield f"data: {json.dumps({'chunk': response_chunk, 'done': False})}\n\n"
-        
-        # Send completion signal
-        yield f"data: {json.dumps({'chunk': '', 'done': True})}\n\n"
-    except Exception as e:
-        error_message = str(e)
-        yield f"data: {json.dumps({'error': error_message, 'done': True})}\n\n"
+        print(f"Error in chat endpoint: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error processing chat request: {str(e)}"
+        )
 
 @app.post(
     "/documents/process",

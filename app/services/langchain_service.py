@@ -8,6 +8,7 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime
 import os
 import uuid
+import asyncio
 
 settings = get_settings()
 
@@ -198,41 +199,53 @@ class LangChainService:
     async def get_chat_response(self, query: str) -> str:
         """Get a response from the chat model with document context."""
         try:
-            # Create conversation chain
-            chain = ConversationalRetrievalChain.from_llm(
-                llm=self.llm,
-                retriever=self.vector_store.as_retriever(),
-                return_source_documents=True,
-                verbose=True  # Add verbose mode for debugging
-            )
+            print(f"Processing chat query: {query[:50]}...")  # Log first 50 chars
+            
+            # Set a timeout for the entire operation
+            async with asyncio.timeout(10.0):  # 10 second timeout
+                # Create conversation chain with optimized parameters
+                chain = ConversationalRetrievalChain.from_llm(
+                    llm=self.llm,
+                    retriever=self.vector_store.as_retriever(
+                        search_kwargs={"k": 3}  # Limit to 3 most relevant documents
+                    ),
+                    return_source_documents=True,
+                    verbose=False  # Disable verbose mode for better performance
+                )
 
-            # Format chat history
-            formatted_history = []
-            for msg in self.chat_history:
-                if msg["role"] == "user":
-                    formatted_history.append((msg["text"], ""))
-                elif msg["role"] == "assistant":
-                    if formatted_history:
-                        formatted_history[-1] = (formatted_history[-1][0], msg["text"])
+                # Format chat history (limit to last 5 messages for context)
+                formatted_history = []
+                recent_history = self.chat_history[-5:] if self.chat_history else []
+                for msg in recent_history:
+                    if msg["role"] == "user":
+                        formatted_history.append((msg["text"], ""))
+                    elif msg["role"] == "assistant":
+                        if formatted_history:
+                            formatted_history[-1] = (formatted_history[-1][0], msg["text"])
 
-            # Get response with error handling
-            try:
-                result = chain({"question": query, "chat_history": formatted_history})
-                if not result or "answer" not in result:
-                    # If no answer is generated, use the LLM directly
+                # Get response with error handling
+                try:
+                    result = chain({"question": query, "chat_history": formatted_history})
+                    if not result or "answer" not in result:
+                        # If no answer is generated, use the LLM directly
+                        response = await self.llm.ainvoke([{"role": "user", "content": query}])
+                        answer = response.content
+                    else:
+                        answer = result["answer"]
+                except Exception as chain_error:
+                    print(f"Chain error, falling back to direct LLM: {str(chain_error)}")
+                    # Fallback to direct LLM response if chain fails
                     response = await self.llm.ainvoke([{"role": "user", "content": query}])
                     answer = response.content
-                else:
-                    answer = result["answer"]
-            except Exception as chain_error:
-                # Fallback to direct LLM response if chain fails
-                response = await self.llm.ainvoke([{"role": "user", "content": query}])
-                answer = response.content
-            
-            # Add to chat history
-            await self.add_to_chat_history("user", query)
-            await self.add_to_chat_history("assistant", answer)
-            
-            return answer
+                
+                # Add to chat history asynchronously
+                asyncio.create_task(self.add_to_chat_history("user", query))
+                asyncio.create_task(self.add_to_chat_history("assistant", answer))
+                
+                return answer
+        except asyncio.TimeoutError:
+            print("Chat response timed out")
+            return "I apologize, but the request took too long to process. Please try again with a shorter message or different query."
         except Exception as e:
-            raise Exception(f"Error getting chat response: {str(e)}") 
+            print(f"Error getting chat response: {str(e)}")
+            return "I apologize, but I encountered an error processing your request. Please try again." 
