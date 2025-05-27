@@ -392,10 +392,25 @@ async def chat(request: ChatRequest):
 async def generate(text: str, history: List[ChatMessage]):
     """Generate streaming response."""
     try:
-        async for chunk in get_completion_stream(text, history):
-            yield f"data: {chunk}\n\n"
+        # Convert history to the format expected by the streaming function
+        formatted_history = []
+        for msg in history:
+            if msg.role == "user":
+                formatted_history.append((msg.text, ""))
+            elif msg.role == "assistant":
+                if formatted_history:
+                    formatted_history[-1] = (formatted_history[-1][0], msg.text)
+
+        # Get streaming response from OpenAI
+        async for chunk in get_completion_stream(text, formatted_history):
+            if chunk:
+                yield f"data: {json.dumps({'chunk': chunk, 'done': False})}\n\n"
+        
+        # Send completion signal
+        yield f"data: {json.dumps({'chunk': '', 'done': True})}\n\n"
     except Exception as e:
-        yield f"data: Error: {str(e)}\n\n"
+        error_message = str(e)
+        yield f"data: {json.dumps({'error': error_message, 'done': True})}\n\n"
 
 @app.post(
     "/documents/process",

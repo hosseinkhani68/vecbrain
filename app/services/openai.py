@@ -50,12 +50,12 @@ def get_embedding(text: str) -> list[float]:
         print(f"Unexpected error: {str(e)}")
         raise
 
-async def get_completion_stream(prompt: str, conversation_history: List[Dict[str, str]] = None) -> AsyncGenerator[str, None]:
+async def get_completion_stream(prompt: str, conversation_history: List[tuple] = None) -> AsyncGenerator[str, None]:
     """Get streaming completion from OpenAI's API with conversation history support.
     
     Args:
         prompt: The current user message
-        conversation_history: List of previous messages in the format [{"role": "user/assistant", "content": "message"}]
+        conversation_history: List of previous messages in the format [(user_msg, assistant_msg)]
         
     Yields:
         str: Chunks of the response as they are generated
@@ -64,13 +64,16 @@ async def get_completion_stream(prompt: str, conversation_history: List[Dict[str
     
     # Add conversation history if provided
     if conversation_history:
-        messages.extend(conversation_history)
+        for user_msg, assistant_msg in conversation_history:
+            messages.append({"role": "user", "content": user_msg})
+            if assistant_msg:
+                messages.append({"role": "assistant", "content": assistant_msg})
     
     # Add the current prompt
     messages.append({"role": "user", "content": prompt})
     
     try:
-        stream = await client.chat.completions.create(
+        stream = client.chat.completions.create(
             model="gpt-4-1106-preview",  # GPT-4 Turbo
             messages=messages,
             temperature=0.7,
@@ -81,7 +84,7 @@ async def get_completion_stream(prompt: str, conversation_history: List[Dict[str
             stream=True  # Enable streaming
         )
         
-        async for chunk in stream:
+        for chunk in stream:
             if chunk.choices[0].delta.content is not None:
                 yield chunk.choices[0].delta.content
                 
