@@ -346,19 +346,23 @@ async def get_chat_history(
 ):
     """Get the chat history with pagination."""
     try:
-        # Add timeout handling with increased timeout
+        print(f"Received chat history request - context_id: {context_id}, limit: {limit}, offset: {offset}")
+        
+        # Add timeout handling with reduced timeout
         messages = await asyncio.wait_for(
             langchain_service.get_chat_history(
                 context_id=context_id,
                 limit=limit,
                 offset=offset
             ),
-            timeout=20.0
+            timeout=5.0  # Reduced timeout to 5 seconds
         )
         
         if not messages:
+            print("No messages found, returning empty response")
             return [ChatHistoryResponse(messages=[])]
             
+        print(f"Returning {len(messages)} messages")
         return [ChatHistoryResponse(messages=messages)]
     except asyncio.TimeoutError:
         print("Request timed out while fetching chat history")

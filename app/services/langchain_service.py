@@ -42,6 +42,8 @@ class LangChainService:
     ) -> List[Dict[str, str]]:
         """Get the chat history from Qdrant with pagination."""
         try:
+            print(f"Fetching chat history - context_id: {context_id}, limit: {limit}, offset: {offset}")
+            
             # Create filter for chat messages
             filter_conditions = {
                 "type": "chat"
@@ -50,6 +52,7 @@ class LangChainService:
                 filter_conditions["context_id"] = context_id
 
             # Use Qdrant's search method with pagination and optimized parameters
+            start_time = datetime.now()
             results = await self.vector_store.client.scroll(
                 collection_name=self.vector_store.collection_name,
                 filter=filter_conditions,
@@ -57,10 +60,13 @@ class LangChainService:
                 offset=offset,
                 with_payload=True,
                 with_vectors=False,
-                timeout=5.0  # Reduced timeout for faster response
+                timeout=3.0  # Reduced timeout for faster response
             )
+            end_time = datetime.now()
+            print(f"Qdrant query took {(end_time - start_time).total_seconds()} seconds")
 
             if not results or not results[0]:
+                print("No results found")
                 return []
 
             # Convert results to chat messages more efficiently
@@ -80,6 +86,7 @@ class LangChainService:
             
             # Sort by timestamp in ascending order
             messages.sort(key=lambda x: x["timestamp"])
+            print(f"Returning {len(messages)} messages")
             return messages
         except Exception as e:
             print(f"Error getting chat history: {str(e)}")
