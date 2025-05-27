@@ -151,4 +151,9 @@ class SearchRequest(BaseModel):
 class SearchResponse(BaseModel):
     """Schema for search results."""
     results: List[Dict[str, Any]] = Field(..., description="Search results")
-    total: int = Field(..., description="Total number of results found") 
+    total: int = Field(..., description="Total number of results found")
+
+class QuestionResponse(BaseModel):
+    """Schema for question answering response."""
+    answer: str = Field(..., description="The generated answer")
+    sources: List[Dict[str, Any]] = Field(..., description="Source documents used to generate the answer") 
