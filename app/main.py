@@ -36,6 +36,7 @@ import os
 import shutil
 import json
 from app.services.openai import get_completion_stream
+import asyncio
 
 app = FastAPI(
     title="VecBrain API",
@@ -334,10 +335,26 @@ Simplified text:"""
 async def get_chat_history(context_id: str = None):
     """Get the chat history."""
     try:
-        messages = await langchain_service.get_chat_history(context_id)
+        # Add timeout handling
+        messages = await asyncio.wait_for(
+            langchain_service.get_chat_history(context_id),
+            timeout=10.0  # 10 second timeout
+        )
+        
+        if not messages:
+            return [ChatHistoryResponse(messages=[])]
+            
         return [ChatHistoryResponse(messages=messages)]
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="Request timed out while fetching chat history"
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error retrieving chat history: {str(e)}"
+        )
 
 @app.post(
     "/chat",

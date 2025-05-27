@@ -51,26 +51,33 @@ class LangChainService:
             if context_id:
                 filter_conditions["context_id"] = context_id
 
-            # Use Qdrant's search method to get all chat messages
+            # Use Qdrant's search method with optimized parameters
             results = await self.vector_store.client.scroll(
                 collection_name=self.vector_store.collection_name,
                 filter=filter_conditions,
-                limit=100,  # Get last 100 messages
+                limit=50,  # Reduced limit for better performance
                 with_payload=True,
-                with_vectors=False
+                with_vectors=False,
+                timeout=5.0  # Add timeout
             )
 
-            # Convert results to chat messages
+            if not results or not results[0]:
+                return []
+
+            # Convert results to chat messages more efficiently
             messages = []
-            for point in results[0]:  # results[0] contains the points
-                if point.payload and "type" in point.payload and point.payload["type"] == "chat":
-                    messages.append({
-                        "id": point.payload.get("message_id", str(uuid.uuid4())),
-                        "text": point.payload.get("content", ""),  # Use content from metadata
-                        "role": point.payload.get("role", "user"),
-                        "timestamp": point.payload.get("timestamp", datetime.now().isoformat()),
-                        "context_id": point.payload.get("context_id")
-                    })
+            for point in results[0]:
+                payload = point.payload
+                if not payload or "type" not in payload or payload["type"] != "chat":
+                    continue
+                    
+                messages.append({
+                    "id": payload.get("message_id", str(uuid.uuid4())),
+                    "text": payload.get("content", ""),
+                    "role": payload.get("role", "user"),
+                    "timestamp": payload.get("timestamp", datetime.now().isoformat()),
+                    "context_id": payload.get("context_id")
+                })
             
             # Sort by timestamp in ascending order
             messages.sort(key=lambda x: x["timestamp"])
