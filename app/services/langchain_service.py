@@ -51,23 +51,25 @@ class LangChainService:
             if context_id:
                 filter_conditions["context_id"] = context_id
 
-            # Search for chat messages in Qdrant
-            results = self.vector_store.similarity_search(
-                query="",  # Empty query to get all messages
-                k=100,  # Get last 100 messages
-                filter=filter_conditions
+            # Use Qdrant's search method to get all chat messages
+            results = await self.vector_store.client.scroll(
+                collection_name=self.vector_store.collection_name,
+                filter=filter_conditions,
+                limit=100,  # Get last 100 messages
+                with_payload=True,
+                with_vectors=False
             )
-            
+
             # Convert results to chat messages
             messages = []
-            for doc in results:
-                if "type" in doc.metadata and doc.metadata["type"] == "chat":
+            for point in results[0]:  # results[0] contains the points
+                if point.payload and "type" in point.payload and point.payload["type"] == "chat":
                     messages.append({
-                        "id": doc.metadata.get("message_id", str(uuid.uuid4())),
-                        "text": doc.page_content,
-                        "role": doc.metadata.get("role", "user"),
-                        "timestamp": doc.metadata.get("timestamp", datetime.now().isoformat()),
-                        "context_id": doc.metadata.get("context_id")
+                        "id": point.payload.get("message_id", str(uuid.uuid4())),
+                        "text": point.payload.get("content", ""),  # Use content from metadata
+                        "role": point.payload.get("role", "user"),
+                        "timestamp": point.payload.get("timestamp", datetime.now().isoformat()),
+                        "context_id": point.payload.get("context_id")
                     })
             
             # Sort by timestamp in ascending order
@@ -89,14 +91,14 @@ class LangChainService:
             
             # Store in Qdrant with all required metadata
             self.vector_store.add_texts(
-                texts=[content],
+                texts=[content],  # Store content in the text field
                 metadatas=[{
                     "type": "chat",
                     "message_id": message_id,
                     "role": role,
                     "timestamp": timestamp,
                     "context_id": context_id,
-                    "content": content  # Store content in metadata for easier retrieval
+                    "content": content  # Also store content in metadata for easier retrieval
                 }]
             )
             
